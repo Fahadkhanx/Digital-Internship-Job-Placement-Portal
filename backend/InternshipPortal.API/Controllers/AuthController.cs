@@ -1,0 +1,121 @@
+using InternshipPortal.API.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace InternshipPortal.API.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class AuthController : ControllerBase
+    {
+        private readonly IAuthService _authService;
+
+        public AuthController(IAuthService authService)
+        {
+            _authService = authService;
+        }
+
+        [HttpPost("register/student")]
+        public async Task<IActionResult> RegisterStudent([FromBody] RegisterStudentRequest request)
+        {
+            try
+            {
+                var token = await _authService.RegisterStudentAsync(
+                    request.Email,
+                    request.Password,
+                    request.FirstName,
+                    request.LastName
+                );
+
+                return Ok(new { success = true, message = "Student registered successfully", token });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("register/employer")]
+        public async Task<IActionResult> RegisterEmployer([FromBody] RegisterEmployerRequest request)
+        {
+            try
+            {
+                var message = await _authService.RegisterEmployerAsync(
+                    request.Email,
+                    request.Password,
+                    request.CompanyName
+                );
+
+                return Ok(new { success = true, message });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequest request)
+        {
+            try
+            {
+                var token = await _authService.LoginAsync(request.Email, request.Password);
+                return Ok(new { success = true, message = "Login successful", token });
+            }
+            catch (Exception ex)
+            {
+                return Unauthorized(new { success = false, message = ex.Message });
+            }
+        }
+
+        [Authorize]
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0");
+                var success = await _authService.ChangePasswordAsync(userId, request.CurrentPassword, request.NewPassword);
+
+                if (success)
+                {
+                    return Ok(new { success = true, message = "Password changed successfully" });
+                }
+
+                return BadRequest(new { success = false, message = "Current password is incorrect" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+    }
+
+    public class RegisterStudentRequest
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+    }
+
+    public class RegisterEmployerRequest
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string CompanyName { get; set; } = string.Empty;
+    }
+
+    public class LoginRequest
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+
+    public class ChangePasswordRequest
+    {
+        public string CurrentPassword { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
+    }
+}
+
