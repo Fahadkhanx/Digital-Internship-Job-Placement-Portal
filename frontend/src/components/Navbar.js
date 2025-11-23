@@ -16,6 +16,9 @@ const Navbar = () => {
   };
 
   const getDashboardLink = () => {
+    if (userType === 'Admin') {
+      return '/admin/dashboard';
+    }
     if (userType === 'Employer') {
       return '/employer/dashboard';
     }

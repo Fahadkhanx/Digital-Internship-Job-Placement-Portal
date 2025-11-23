@@ -88,11 +88,28 @@ namespace InternshipPortal.API.Services
             return "Employer registered successfully. Pending verification.";
         }
 
-        public async Task<string> LoginAsync(string email, string password)
+        public async Task<LoginResult> LoginAsync(string email, string password)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
 
-            if (user == null || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+            if (user == null)
+            {
+                throw new Exception("Invalid email or password");
+            }
+
+            // Verify password
+            bool isPasswordValid = false;
+            try
+            {
+                isPasswordValid = BCrypt.Net.BCrypt.Verify(password, user.PasswordHash);
+            }
+            catch
+            {
+                // Password hash might be invalid format
+                isPasswordValid = false;
+            }
+
+            if (!isPasswordValid)
             {
                 throw new Exception("Invalid email or password");
             }
@@ -102,7 +119,16 @@ namespace InternshipPortal.API.Services
                 throw new Exception("Account is deactivated");
             }
 
-            return GenerateJwtToken(user);
+            var token = GenerateJwtToken(user);
+
+            return new LoginResult
+            {
+                Token = token,
+                UserId = user.UserId,
+                Email = user.Email,
+                UserType = user.UserType.ToString(),
+                IsVerified = user.IsVerified
+            };
         }
 
         public async Task<bool> ChangePasswordAsync(int userId, string currentPassword, string newPassword)
