@@ -53,11 +53,14 @@ mysql -u root -p < database/schema.sql
 ```
 
 ### Backend Setup (C# .NET)
+
 ```bash
 cd backend/InternshipPortal.API
 
 dotnet restore
 dotnet run
+
+
 
 ```
 
@@ -94,7 +97,7 @@ internship-and-job-placement/
 │   └── ER_Diagram.md
 └── docs/                        # Documentation
     ├── WEEK_WISE_PLAN.md
-    └── GITHUB_UPLOAD_GUIDE.md
+   
 ```
 
 ## Contributors
@@ -102,10 +105,4 @@ internship-and-job-placement/
 - Fahad Shah
 - Khan Huzaifa
 
-## Supervisor
 
-David Keane
-
-## License
-
-This project is developed for academic purposes.
