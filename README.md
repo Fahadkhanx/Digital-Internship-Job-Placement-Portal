@@ -48,26 +48,26 @@ internship-and-job-placement/
 
 ### Database Setup
 ```bash
-# MySQL mein database create karein
+
 mysql -u root -p < database/schema.sql
 ```
 
 ### Backend Setup (C# .NET)
 ```bash
 cd backend/InternshipPortal.API
-# appsettings.json mein database connection string update karein
+
 dotnet restore
 dotnet run
-# API http://localhost:5000 par chalega
+
 ```
 
 ### Frontend Setup (React)
 ```bash
 cd frontend
 npm install
-# .env file create karo aur REACT_APP_API_URL set karo
+
 npm start
-# Frontend http://localhost:3000 par chalega
+
 ```
 
 ## Project Structure

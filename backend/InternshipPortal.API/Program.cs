@@ -4,11 +4,17 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using InternshipPortal.API.Data;
 using InternshipPortal.API.Services;
+using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Configure JSON serialization to use string names for enums
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -63,6 +69,7 @@ builder.Services.AddScoped<IStudentService, StudentService>();
 builder.Services.AddScoped<IEmployerService, EmployerService>();
 builder.Services.AddScoped<IJobService, JobService>();
 builder.Services.AddScoped<IApplicationService, ApplicationService>();
+builder.Services.AddScoped<IBookmarkService, BookmarkService>();
 
 var app = builder.Build();
 
@@ -98,14 +105,41 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.UseHttpsRedirection();
+// Only redirect HTTPS in production
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
+
+// Serve static files (for uploads)
+app.UseStaticFiles();
+
+// Serve uploads folder from ContentRootPath
+var uploadsPath = Path.Combine(app.Environment.ContentRootPath, "uploads");
+if (!Directory.Exists(uploadsPath))
+{
+    Directory.CreateDirectory(uploadsPath);
+    Directory.CreateDirectory(Path.Combine(uploadsPath, "resumes"));
+    Directory.CreateDirectory(Path.Combine(uploadsPath, "profiles"));
+    Directory.CreateDirectory(Path.Combine(uploadsPath, "logos"));
+}
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(uploadsPath),
+    RequestPath = "/uploads"
+});
+
 app.UseCors("AllowReactApp");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+var urls = app.Configuration["Urls"] ?? "http://localhost:5000";
 Console.WriteLine("\n🚀 API Server Starting...");
-Console.WriteLine($"📍 Swagger UI: https://localhost:5001/swagger");
-Console.WriteLine($"📍 Health Check: http://localhost:5000/api/health\n");
+Console.WriteLine($"📍 API URL: {urls}");
+Console.WriteLine($"📍 Swagger UI: http://localhost:5000/swagger");
+Console.WriteLine($"📍 Health Check: http://localhost:5000/api/health");
+Console.WriteLine($"📍 Frontend should use: http://localhost:5000/api\n");
 
 app.Run();

@@ -12,9 +12,17 @@ const JobDetails = () => {
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
+  const [hasApplied, setHasApplied] = useState(false);
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [showApplyModal, setShowApplyModal] = useState(false);
+  const [coverLetter, setCoverLetter] = useState('');
 
   useEffect(() => {
     fetchJob();
+    if (authService.isAuthenticated() && authService.getUserType() === 'Student') {
+      checkApplicationStatus();
+      checkBookmarkStatus();
+    }
   }, [id]);
 
   const fetchJob = async () => {
@@ -31,14 +39,87 @@ const JobDetails = () => {
     }
   };
 
+  const checkApplicationStatus = async () => {
+    try {
+      const response = await api.get(`/applications/check/${id}`);
+      if (response.data.success) {
+        setHasApplied(response.data.hasApplied);
+      }
+    } catch (error) {
+      console.error('Error checking application:', error);
+    }
+  };
+
+  const checkBookmarkStatus = async () => {
+    try {
+      const response = await api.get(`/bookmarks/check/${id}`);
+      if (response.data.success) {
+        setIsBookmarked(response.data.isBookmarked);
+      }
+    } catch (error) {
+      console.error('Error checking bookmark:', error);
+    }
+  };
+
   const handleApply = () => {
     if (!authService.isAuthenticated()) {
       toast.info('Please login to apply for this job');
       navigate('/login');
       return;
     }
-    // TODO: Week 6 - Implement application submission
-    toast.info('Application feature will be available in Week 6');
+    if (authService.getUserType() !== 'Student') {
+      toast.error('Only students can apply for jobs');
+      return;
+    }
+    if (hasApplied) {
+      toast.info('You have already applied for this job');
+      return;
+    }
+    setShowApplyModal(true);
+  };
+
+  const submitApplication = async () => {
+    setApplying(true);
+    try {
+      const response = await api.post('/applications/apply', {
+        jobId: parseInt(id),
+        coverLetter: coverLetter
+      });
+      if (response.data.success) {
+        toast.success('Application submitted successfully!');
+        setHasApplied(true);
+        setShowApplyModal(false);
+        setCoverLetter('');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to submit application');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const handleBookmark = async () => {
+    if (!authService.isAuthenticated()) {
+      toast.info('Please login to bookmark jobs');
+      navigate('/login');
+      return;
+    }
+    if (authService.getUserType() !== 'Student') {
+      return;
+    }
+    try {
+      if (isBookmarked) {
+        await api.delete(`/bookmarks/${id}`);
+        setIsBookmarked(false);
+        toast.success('Bookmark removed');
+      } else {
+        await api.post(`/bookmarks/${id}`);
+        setIsBookmarked(true);
+        toast.success('Job bookmarked');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to update bookmark');
+    }
   };
 
   if (loading) {
@@ -139,16 +220,21 @@ const JobDetails = () => {
               )}
 
               <button 
-                className="btn-apply" 
+                className={`btn-apply ${hasApplied ? 'applied' : ''}`}
                 onClick={handleApply}
-                disabled={applying}
+                disabled={applying || hasApplied}
               >
-                {applying ? 'Applying...' : 'Apply Now'}
+                {hasApplied ? '✓ Applied' : applying ? 'Applying...' : 'Apply Now'}
               </button>
 
-              <button className="btn-bookmark">
-                💾 Save Job
-              </button>
+              {authService.isAuthenticated() && authService.getUserType() === 'Student' && (
+                <button 
+                  className={`btn-bookmark ${isBookmarked ? 'bookmarked' : ''}`}
+                  onClick={handleBookmark}
+                >
+                  {isBookmarked ? '✓ Saved' : '💾 Save Job'}
+                </button>
+              )}
             </div>
 
             <div className="company-info-card">
@@ -170,6 +256,31 @@ const JobDetails = () => {
           </div>
         </div>
       </div>
+
+      {showApplyModal && (
+        <div className="modal-overlay" onClick={() => setShowApplyModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Apply for {job.title}</h2>
+            <div className="form-group">
+              <label>Cover Letter (Optional)</label>
+              <textarea
+                value={coverLetter}
+                onChange={(e) => setCoverLetter(e.target.value)}
+                rows="6"
+                placeholder="Tell the employer why you're a good fit for this position..."
+              />
+            </div>
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={() => setShowApplyModal(false)}>
+                Cancel
+              </button>
+              <button className="btn-submit" onClick={submitApplication} disabled={applying}>
+                {applying ? 'Submitting...' : 'Submit Application'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

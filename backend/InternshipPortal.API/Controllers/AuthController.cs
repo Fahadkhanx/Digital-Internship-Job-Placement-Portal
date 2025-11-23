@@ -59,8 +59,18 @@ namespace InternshipPortal.API.Controllers
         {
             try
             {
-                var token = await _authService.LoginAsync(request.Email, request.Password);
-                return Ok(new { success = true, message = "Login successful", token });
+                var result = await _authService.LoginAsync(request.Email, request.Password);
+                return Ok(new { 
+                    success = true, 
+                    message = "Login successful", 
+                    token = result.Token,
+                    user = new {
+                        userId = result.UserId,
+                        email = result.Email,
+                        userType = result.UserType,
+                        isVerified = result.IsVerified
+                    }
+                });
             }
             catch (Exception ex)
             {
