@@ -94,7 +94,7 @@ internship-and-job-placement/
 │   └── ER_Diagram.md
 └── docs/                        # Documentation
     ├── WEEK_WISE_PLAN.md
-    └── GITHUB_UPLOAD_GUIDE.md
+    
 ```
 
 ## Contributors
