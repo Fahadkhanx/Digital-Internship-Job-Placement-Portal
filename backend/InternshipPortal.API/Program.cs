@@ -74,6 +74,9 @@ builder.Services.AddScoped<IBookmarkService, BookmarkService>();
 =======
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IMessageService, MessageService>();
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
 var app = builder.Build();
