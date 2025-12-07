@@ -66,6 +66,7 @@ namespace InternshipPortal.API.Services
             return await _context.Applications
                 .Include(a => a.Job)
                     .ThenInclude(j => j.Employer)
+                        .ThenInclude(e => e.User)
                 .Where(a => a.StudentId == student.StudentId)
                 .OrderByDescending(a => a.AppliedAt)
                 .ToListAsync();
@@ -89,6 +90,9 @@ namespace InternshipPortal.API.Services
             return await _context.Applications
                 .Include(a => a.Student)
                     .ThenInclude(s => s.User)
+                .Include(a => a.Job)
+                    .ThenInclude(j => j.Employer)
+                        .ThenInclude(e => e.User)
                 .Where(a => a.JobId == jobId)
                 .OrderByDescending(a => a.AppliedAt)
                 .ToListAsync();

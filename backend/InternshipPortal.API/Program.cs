@@ -70,6 +70,11 @@ builder.Services.AddScoped<IEmployerService, EmployerService>();
 builder.Services.AddScoped<IJobService, JobService>();
 builder.Services.AddScoped<IApplicationService, ApplicationService>();
 builder.Services.AddScoped<IBookmarkService, BookmarkService>();
+<<<<<<< Updated upstream
+=======
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IMessageService, MessageService>();
+>>>>>>> Stashed changes
 
 var app = builder.Build();
 

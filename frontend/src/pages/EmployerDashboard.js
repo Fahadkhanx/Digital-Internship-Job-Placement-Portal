@@ -14,6 +14,12 @@ const EmployerDashboard = () => {
   const [applications, setApplications] = useState([]);
   const [loadingApplications, setLoadingApplications] = useState(false);
   const [showApplications, setShowApplications] = useState(false);
+  const [stats, setStats] = useState({
+    totalJobs: 0,
+    activeJobs: 0,
+    totalApplications: 0,
+    pendingApplications: 0
+  });
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -37,7 +43,35 @@ const EmployerDashboard = () => {
     try {
       const response = await api.get('/jobs/my-jobs');
       if (response.data.success) {
-        setJobs(response.data.jobs || []);
+        const jobsList = response.data.jobs || [];
+        setJobs(jobsList);
+        
+        // Calculate statistics
+        const totalJobs = jobsList.length;
+        const activeJobs = jobsList.filter(j => j.isActive).length;
+        let totalApplications = 0;
+        let pendingApplications = 0;
+        
+        // Fetch applications for each job to get accurate counts
+        for (const job of jobsList) {
+          try {
+            const appResponse = await api.get(`/applications/job/${job.jobId}`);
+            if (appResponse.data.success) {
+              const jobApps = appResponse.data.applications || [];
+              totalApplications += jobApps.length;
+              pendingApplications += jobApps.filter(app => app.status === 'Pending').length;
+            }
+          } catch (err) {
+            // Ignore errors for individual job applications
+          }
+        }
+        
+        setStats({
+          totalJobs,
+          activeJobs,
+          totalApplications,
+          pendingApplications
+        });
       }
     } catch (error) {
       console.error('Error fetching jobs:', error);
@@ -161,8 +195,6 @@ const EmployerDashboard = () => {
     fetchApplications(job.jobId);
   };
 
-  const activeJobs = jobs.filter(j => j.isActive).length;
-  const totalApplications = jobs.reduce((sum, j) => sum + (j.applicationCount || 0), 0);
 
   return (
     <div className="dashboard">
@@ -176,22 +208,29 @@ const EmployerDashboard = () => {
           <div className="stat-card">
             <div className="stat-icon">💼</div>
             <div className="stat-info">
-              <h3>{activeJobs}</h3>
+              <h3>{stats.totalJobs}</h3>
+              <p>Total Jobs</p>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon">✅</div>
+            <div className="stat-info">
+              <h3>{stats.activeJobs}</h3>
               <p>Active Jobs</p>
             </div>
           </div>
           <div className="stat-card">
             <div className="stat-icon">📥</div>
             <div className="stat-info">
-              <h3>{totalApplications}</h3>
-              <p>Applications</p>
+              <h3>{stats.totalApplications}</h3>
+              <p>Total Applications</p>
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-icon">📋</div>
+            <div className="stat-icon">⏳</div>
             <div className="stat-info">
-              <h3>{jobs.length}</h3>
-              <p>Total Jobs</p>
+              <h3>{stats.pendingApplications}</h3>
+              <p>Pending Reviews</p>
             </div>
           </div>
         </div>

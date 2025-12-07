@@ -18,18 +18,34 @@ namespace InternshipPortal.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetJobs([FromQuery] string? search, [FromQuery] string? jobType, [FromQuery] string? location, [FromQuery] int page = 1, [FromQuery] int limit = 10)
+        public async Task<IActionResult> GetJobs(
+            [FromQuery] string? search, 
+            [FromQuery] string? jobType, 
+            [FromQuery] string? location,
+            [FromQuery] string? experienceLevel,
+            [FromQuery] string? requiredSkills,
+            [FromQuery] decimal? salaryMin,
+            [FromQuery] decimal? salaryMax,
+            [FromQuery] bool? remoteOnly,
+            [FromQuery] DateTime? postedAfter,
+            [FromQuery] DateTime? deadlineBefore,
+            [FromQuery] string? sortBy = "newest",
+            [FromQuery] int page = 1, 
+            [FromQuery] int limit = 10)
         {
             var query = _context.JobPostings
                 .Include(j => j.Employer)
                 .ThenInclude(e => e.User)
                 .Where(j => j.IsActive && j.Employer.VerificationStatus == VerificationStatus.Verified);
 
+            // Search in title and description
             if (!string.IsNullOrEmpty(search))
             {
-                query = query.Where(j => j.Title.Contains(search) || j.Description.Contains(search));
+                query = query.Where(j => j.Title.Contains(search) || j.Description.Contains(search) || 
+                    (j.RequiredSkills != null && j.RequiredSkills.Contains(search)));
             }
 
+            // Job type filter
             if (!string.IsNullOrEmpty(jobType))
             {
                 if (Enum.TryParse<JobType>(jobType, true, out var type))
@@ -38,9 +54,77 @@ namespace InternshipPortal.API.Controllers
                 }
             }
 
+            // Location filter
             if (!string.IsNullOrEmpty(location))
             {
                 query = query.Where(j => (j.Location != null && j.Location.Contains(location)) || j.RemoteOption);
+            }
+
+            // Experience level filter
+            if (!string.IsNullOrEmpty(experienceLevel))
+            {
+                if (Enum.TryParse<ExperienceLevel>(experienceLevel, true, out var expLevel))
+                {
+                    query = query.Where(j => j.ExperienceLevel == expLevel);
+                }
+            }
+
+            // Required skills filter
+            if (!string.IsNullOrEmpty(requiredSkills))
+            {
+                var skills = requiredSkills.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                foreach (var skill in skills)
+                {
+                    query = query.Where(j => j.RequiredSkills != null && j.RequiredSkills.Contains(skill));
+                }
+            }
+
+            // Salary range filter
+            if (salaryMin.HasValue)
+            {
+                query = query.Where(j => j.SalaryMax == null || j.SalaryMax >= salaryMin.Value);
+            }
+            if (salaryMax.HasValue)
+            {
+                query = query.Where(j => j.SalaryMin == null || j.SalaryMin <= salaryMax.Value);
+            }
+
+            // Remote only filter
+            if (remoteOnly == true)
+            {
+                query = query.Where(j => j.RemoteOption == true);
+            }
+
+            // Posted after date filter
+            if (postedAfter.HasValue)
+            {
+                query = query.Where(j => j.CreatedAt >= postedAfter.Value);
+            }
+
+            // Deadline before filter
+            if (deadlineBefore.HasValue)
+            {
+                query = query.Where(j => j.ApplicationDeadline == null || j.ApplicationDeadline <= deadlineBefore.Value);
+            }
+
+            // Sorting
+            switch (sortBy.ToLower())
+            {
+                case "salary_high":
+                    query = query.OrderByDescending(j => j.SalaryMax ?? j.SalaryMin ?? 0);
+                    break;
+                case "salary_low":
+                    query = query.OrderBy(j => j.SalaryMin ?? j.SalaryMax ?? decimal.MaxValue);
+                    break;
+                case "deadline":
+                    query = query.OrderBy(j => j.ApplicationDeadline ?? DateTime.MaxValue);
+                    break;
+                case "oldest":
+                    query = query.OrderBy(j => j.CreatedAt);
+                    break;
+                default: // newest
+                    query = query.OrderByDescending(j => j.CreatedAt);
+                    break;
             }
 
             var total = await query.CountAsync();

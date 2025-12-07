@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
+import NotificationBell from './NotificationBell';
 import './Navbar.css';
 
 const Navbar = () => {
@@ -40,6 +41,7 @@ const Navbar = () => {
               <Link to={getDashboardLink()} className="navbar-link">
                 Dashboard
               </Link>
+              <NotificationBell />
               <div className="user-info">
                 <span className="user-email">{user?.email || 'User'}</span>
               </div>
