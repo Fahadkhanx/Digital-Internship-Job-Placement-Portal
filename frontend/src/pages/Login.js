@@ -39,7 +39,9 @@ const Login = () => {
         if (response.user) {
           localStorage.setItem('user', JSON.stringify(response.user));
           // Redirect based on user type
-          if (response.user.userType === 'Employer') {
+          if (response.user.userType === 'Admin') {
+            navigate('/admin/dashboard');
+          } else if (response.user.userType === 'Employer') {
             navigate('/employer/dashboard');
           } else {
             navigate('/student/dashboard');

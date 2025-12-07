@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import './Dashboard.css';
 
 const EmployerDashboard = () => {
+  const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showJobForm, setShowJobForm] = useState(false);
@@ -243,6 +244,7 @@ const EmployerDashboard = () => {
                 ➕ Post New Job
               </button>
               <Link to="/employer/profile" className="action-btn">✏️ Edit Company Profile</Link>
+              <Link to="/messages" className="action-btn">💬 Messages</Link>
             </div>
           </div>
 
@@ -436,6 +438,20 @@ const EmployerDashboard = () => {
                             <p>{application.student.bio}</p>
                           </div>
                         )}
+                        <div className="application-actions">
+                          <button 
+                            className="btn-message" 
+                            onClick={() => {
+                              if (application.student?.user?.userId) {
+                                navigate(`/messages?userId=${application.student.user.userId}&applicationId=${application.applicationId}`);
+                              } else {
+                                toast.error('Unable to start conversation. Student user ID not found.');
+                              }
+                            }}
+                          >
+                            💬 Send Message
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}

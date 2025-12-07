@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -8,6 +8,7 @@ import './MyApplications.css';
 const MyApplications = () => {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchApplications();
@@ -96,6 +97,21 @@ const MyApplications = () => {
                     <p>{app.coverLetter}</p>
                   </div>
                 )}
+                <div className="application-actions">
+                  <button 
+                    className="btn-message" 
+                    onClick={() => {
+                      // Get employer user ID from job
+                      if (app.job?.employer?.user?.userId) {
+                        navigate(`/messages?userId=${app.job.employer.user.userId}&applicationId=${app.applicationId}`);
+                      } else {
+                        toast.error('Unable to start conversation. Employer information not found.');
+                      }
+                    }}
+                  >
+                    💬 Message Employer
+                  </button>
+                </div>
               </div>
             ))}
           </div>

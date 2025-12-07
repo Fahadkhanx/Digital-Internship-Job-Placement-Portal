@@ -17,6 +17,7 @@ import MyApplications from './pages/MyApplications';
 import SavedJobs from './pages/SavedJobs';
 import JobListings from './pages/JobListings';
 import JobDetails from './pages/JobDetails';
+import Messages from './pages/Messages';
 
 // Components
 import Navbar from './components/Navbar';
@@ -87,6 +88,14 @@ function App() {
             element={
               <ProtectedRoute userType="Admin">
                 <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/messages"
+            element={
+              <ProtectedRoute>
+                <Messages />
               </ProtectedRoute>
             }
           />
