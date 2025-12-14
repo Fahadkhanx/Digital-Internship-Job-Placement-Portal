@@ -143,7 +143,7 @@ namespace InternshipPortal.API.Controllers
         }
 
         [HttpPut("employers/{id}/reject")]
-        public async Task<IActionResult> RejectEmployer(int id, [FromBody] RejectEmployerRequest? request = null)
+        public async Task<IActionResult> RejectEmployer(int id)
         {
             try
             {

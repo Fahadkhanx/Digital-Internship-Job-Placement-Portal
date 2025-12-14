@@ -23,6 +23,20 @@ namespace InternshipPortal.API.Models
         [Required]
         public string MessageText { get; set; } = string.Empty;
 
+        // File attachments
+        public MessageType MessageType { get; set; } = MessageType.Text;
+        
+        [MaxLength(500)]
+        public string? FileUrl { get; set; }
+        
+        [MaxLength(255)]
+        public string? FileName { get; set; }
+        
+        [MaxLength(50)]
+        public string? FileType { get; set; } // MIME type
+        
+        public long? FileSize { get; set; } // in bytes
+
         public bool IsRead { get; set; } = false;
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -35,5 +49,15 @@ namespace InternshipPortal.API.Models
 
         [ForeignKey("ReceiverId")]
         public User? Receiver { get; set; }
+    }
+
+    public enum MessageType
+    {
+        Text,
+        Image,
+        Video,
+        Document,
+        Voice,
+        Meeting
     }
 }

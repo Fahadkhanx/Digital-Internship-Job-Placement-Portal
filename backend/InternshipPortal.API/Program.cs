@@ -70,6 +70,9 @@ builder.Services.AddScoped<IEmployerService, EmployerService>();
 builder.Services.AddScoped<IJobService, JobService>();
 builder.Services.AddScoped<IApplicationService, ApplicationService>();
 builder.Services.AddScoped<IBookmarkService, BookmarkService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IMessageService, MessageService>();
+builder.Services.AddScoped<IMeetingService, MeetingService>();
 
 var app = builder.Build();
 
@@ -122,6 +125,11 @@ if (!Directory.Exists(uploadsPath))
     Directory.CreateDirectory(Path.Combine(uploadsPath, "resumes"));
     Directory.CreateDirectory(Path.Combine(uploadsPath, "profiles"));
     Directory.CreateDirectory(Path.Combine(uploadsPath, "logos"));
+    Directory.CreateDirectory(Path.Combine(uploadsPath, "messages"));
+    Directory.CreateDirectory(Path.Combine(uploadsPath, "messages", "images"));
+    Directory.CreateDirectory(Path.Combine(uploadsPath, "messages", "videos"));
+    Directory.CreateDirectory(Path.Combine(uploadsPath, "messages", "documents"));
+    Directory.CreateDirectory(Path.Combine(uploadsPath, "messages", "voice"));
 }
 
 app.UseStaticFiles(new StaticFileOptions

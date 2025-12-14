@@ -19,6 +19,7 @@ namespace InternshipPortal.API.Data
         public DbSet<Application> Applications { get; set; }
         public DbSet<Bookmark> Bookmarks { get; set; }
         public DbSet<Message> Messages { get; set; }
+        public DbSet<Meeting> Meetings { get; set; }
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<SystemLog> SystemLogs { get; set; }
         public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
@@ -236,6 +237,17 @@ namespace InternshipPortal.API.Data
                 entity.Property(e => e.ReceiverId).HasColumnName("receiver_id");
                 entity.Property(e => e.Subject).HasColumnName("subject");
                 entity.Property(e => e.MessageText).HasColumnName("message_text");
+                entity.Property(e => e.MessageType)
+                      .HasColumnName("message_type")
+                      .HasConversion(
+                          v => v.ToString().ToLower(),
+                          v => (MessageType)Enum.Parse(typeof(MessageType), v, true)
+                      )
+                      .HasDefaultValue(MessageType.Text);
+                entity.Property(e => e.FileUrl).HasColumnName("file_url");
+                entity.Property(e => e.FileName).HasColumnName("file_name");
+                entity.Property(e => e.FileType).HasColumnName("file_type");
+                entity.Property(e => e.FileSize).HasColumnName("file_size");
                 entity.Property(e => e.IsRead).HasColumnName("is_read");
                 entity.Property(e => e.CreatedAt).HasColumnName("created_at");
                 entity.HasOne(e => e.Sender)
@@ -246,6 +258,41 @@ namespace InternshipPortal.API.Data
                       .WithMany()
                       .HasForeignKey(e => e.ReceiverId)
                       .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // Meeting configuration
+            modelBuilder.Entity<Meeting>(entity =>
+            {
+                entity.ToTable("meetings");
+                entity.HasKey(e => e.MeetingId);
+                entity.Property(e => e.MeetingId).HasColumnName("meeting_id");
+                entity.Property(e => e.OrganizerId).HasColumnName("organizer_id");
+                entity.Property(e => e.ParticipantId).HasColumnName("participant_id");
+                entity.Property(e => e.Title).HasColumnName("title");
+                entity.Property(e => e.Description).HasColumnName("description");
+                entity.Property(e => e.ScheduledAt).HasColumnName("scheduled_at");
+                entity.Property(e => e.DurationMinutes).HasColumnName("duration_minutes");
+                entity.Property(e => e.Status)
+                      .HasColumnName("status")
+                      .HasConversion(new Converters.MeetingStatusConverter())
+                      .HasDefaultValue(MeetingStatus.Scheduled);
+                entity.Property(e => e.MeetingLink).HasColumnName("meeting_link");
+                entity.Property(e => e.MeetingIdExternal).HasColumnName("meeting_id_external");
+                entity.Property(e => e.ApplicationId).HasColumnName("application_id");
+                entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+                entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+                entity.HasOne(e => e.Organizer)
+                      .WithMany()
+                      .HasForeignKey(e => e.OrganizerId)
+                      .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Participant)
+                      .WithMany()
+                      .HasForeignKey(e => e.ParticipantId)
+                      .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(e => e.Application)
+                      .WithMany()
+                      .HasForeignKey(e => e.ApplicationId)
+                      .OnDelete(DeleteBehavior.SetNull);
             });
 
             // Notification configuration
