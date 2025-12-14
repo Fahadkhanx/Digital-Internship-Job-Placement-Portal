@@ -69,7 +69,7 @@ const AdminDashboard = () => {
     if (!window.confirm('Are you sure you want to reject this employer?')) return;
     
     try {
-      const response = await api.put(`/admin/employers/${employerId}/reject`);
+      const response = await api.put(`/admin/employers/${employerId}/reject`, {});
       if (response.data.success) {
         toast.success('Employer rejected successfully');
         fetchEmployers();

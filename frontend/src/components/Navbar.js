@@ -41,6 +41,12 @@ const Navbar = () => {
               <Link to={getDashboardLink()} className="navbar-link">
                 Dashboard
               </Link>
+              <Link to="/messages" className="navbar-link">
+                Messages
+              </Link>
+              <Link to="/meetings" className="navbar-link">
+                My Meetings
+              </Link>
               <NotificationBell />
               <div className="user-info">
                 <span className="user-email">{user?.email || 'User'}</span>

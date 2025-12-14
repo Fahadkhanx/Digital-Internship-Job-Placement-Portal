@@ -18,6 +18,8 @@ import SavedJobs from './pages/SavedJobs';
 import JobListings from './pages/JobListings';
 import JobDetails from './pages/JobDetails';
 import Messages from './pages/Messages';
+import VideoCall from './pages/VideoCall';
+import MyMeetings from './pages/MyMeetings';
 
 // Components
 import Navbar from './components/Navbar';
@@ -96,6 +98,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <Messages />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/video-call/:meetingId"
+            element={
+              <ProtectedRoute>
+                <VideoCall />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/meetings"
+            element={
+              <ProtectedRoute>
+                <MyMeetings />
               </ProtectedRoute>
             }
           />
