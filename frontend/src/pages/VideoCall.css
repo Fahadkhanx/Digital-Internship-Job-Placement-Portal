@@ -123,8 +123,11 @@
 .remote-video-full {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  background: #1a1a1a;
+  object-fit: cover;  /* Cover full area for better quality */
+  background: #000;
+  image-rendering: -webkit-optimize-contrast; /* Better rendering */
+  image-rendering: crisp-edges;
+  image-rendering: high-quality;
 }
 
 .local-video-full {

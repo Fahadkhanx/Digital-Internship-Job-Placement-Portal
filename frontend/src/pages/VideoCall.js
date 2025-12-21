@@ -5,6 +5,55 @@ import api from '../services/api';
 import { authService } from '../services/authService';
 import './VideoCall.css';
 
+// Function to enhance SDP for better quality
+const enhanceSDPForQuality = (sdp) => {
+  let enhancedSdp = sdp;
+  
+  // Set video bitrate constraints in SDP
+  // Add bandwidth constraints for high quality video (2.5 Mbps)
+  if (!enhancedSdp.includes('b=AS:2500')) {
+    // Find the video media section and add bandwidth constraint
+    enhancedSdp = enhancedSdp.replace(
+      /(m=video \d+.*\n)/,
+      '$1b=AS:2500\r\nb=TIAS:2500000\r\n'
+    );
+  }
+  
+  // Set audio bitrate constraints (128 kbps for high quality)
+  if (!enhancedSdp.includes('b=AS:128')) {
+    enhancedSdp = enhancedSdp.replace(
+      /(m=audio \d+.*\n)/,
+      '$1b=AS:128\r\nb=TIAS:128000\r\n'
+    );
+  }
+  
+  // Enhance Opus audio codec settings for better quality
+  enhancedSdp = enhancedSdp.replace(
+    /(a=fmtp:\d+.*opus)/gi,
+    (match) => {
+      // Check if maxaveragebitrate is already set
+      if (!match.includes('maxaveragebitrate')) {
+        return match + ';maxaveragebitrate=128000;stereo=1;useinbandfec=1';
+      }
+      return match.replace(/maxaveragebitrate=\d+/, 'maxaveragebitrate=128000');
+    }
+  );
+  
+  // Enhance H.264 video codec settings
+  enhancedSdp = enhancedSdp.replace(
+    /(a=fmtp:\d+.*profile-level-id)/gi,
+    (match) => {
+      if (!match.includes('max-fs')) {
+        return match + ';max-fs=8160;max-fr=30;max-mbps=245760';
+      }
+      return match;
+    }
+  );
+  
+  console.log('✅ SDP enhanced with quality settings');
+  return enhancedSdp;
+};
+
 const VideoCall = () => {
   const { meetingId } = useParams();
   const navigate = useNavigate();
@@ -102,14 +151,62 @@ const VideoCall = () => {
     peerConnectionRef.current = pc;
     console.log('RTCPeerConnection created');
 
-    // Add local stream tracks to peer connection
+    // Add local stream tracks to peer connection with quality settings
     // Use provided stream first, then fallback to state
     const streamToUse = stream || localStream;
     if (streamToUse) {
       console.log('Adding tracks from stream...');
-      streamToUse.getTracks().forEach(track => {
-        pc.addTrack(track, streamToUse);
+      streamToUse.getTracks().forEach(async (track) => {
+        const sender = pc.addTrack(track, streamToUse);
         console.log('Added local track:', track.kind, track.id, track.enabled, track.readyState);
+        
+        // Enhance video track quality settings
+        if (track.kind === 'video' && sender.track) {
+          try {
+            // Get current parameters and enhance them
+            const params = sender.getParameters();
+            if (!params.encodings) {
+              params.encodings = [{}];
+            }
+            
+            // Set high-quality video encoding parameters
+            params.encodings[0] = {
+              ...params.encodings[0],
+              maxBitrate: 2500000,      // 2.5 Mbps for high quality
+              minBitrate: 500000,       // 500 kbps minimum
+              maxFramerate: 30,         // 30 FPS max
+              scaleResolutionDownBy: 1, // No downscaling
+              rid: params.encodings[0]?.rid || 'high' // Resolution ID
+            };
+            
+            await sender.setParameters(params);
+            console.log('✅ Enhanced video track settings:', params.encodings[0]);
+          } catch (error) {
+            console.warn('Could not set video parameters (may not be supported):', error);
+          }
+        }
+        
+        // Enhance audio track quality
+        if (track.kind === 'audio' && sender.track) {
+          try {
+            const params = sender.getParameters();
+            if (!params.encodings) {
+              params.encodings = [{}];
+            }
+            
+            params.encodings[0] = {
+              ...params.encodings[0],
+              maxBitrate: 128000,       // 128 kbps for high-quality audio
+              priority: 'high',
+              networkPriority: 'high'
+            };
+            
+            await sender.setParameters(params);
+            console.log('✅ Enhanced audio track settings:', params.encodings[0]);
+          } catch (error) {
+            console.warn('Could not set audio parameters (may not be supported):', error);
+          }
+        }
       });
       console.log('Total tracks added:', streamToUse.getTracks().length);
     } else {
@@ -409,6 +506,13 @@ const VideoCall = () => {
                 offerToReceiveAudio: true,
                 offerToReceiveVideo: true
               });
+              
+              // Enhance SDP with quality settings
+              if (answer.sdp) {
+                answer.sdp = enhanceSDPForQuality(answer.sdp);
+                console.log('✅ SDP enhanced for quality');
+              }
+              
               console.log('✅ Answer created:', answer.type);
               await pc.setLocalDescription(answer);
               console.log('✅ Local description set (answer)');
@@ -492,17 +596,28 @@ const VideoCall = () => {
       
       console.log('Browser support check passed');
 
-      // Request camera and microphone access
+      // Request camera and microphone access with enhanced quality settings
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user'
+          width: { ideal: 1920, min: 1280 },      // Prefer 1080p, minimum 720p
+          height: { ideal: 1080, min: 720 },
+          frameRate: { ideal: 30, min: 24 },      // 30 FPS ideal, minimum 24 FPS
+          facingMode: 'user',
+          aspectRatio: { ideal: 16/9 },           // 16:9 aspect ratio
+          resizeMode: 'none'                      // Don't resize, use native resolution
         },
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true
+          autoGainControl: true,
+          sampleRate: 48000,                      // 48kHz sample rate for high quality
+          channelCount: { ideal: 2 },             // Stereo audio
+          latency: 0.01,                          // Low latency (10ms)
+          googEchoCancellation: true,             // Google-specific echo cancellation
+          googNoiseSuppression: true,
+          googAutoGainControl: true,
+          googHighpassFilter: true,               // Filter out low frequencies
+          googTypingNoiseDetection: true          // Detect and reduce typing noise
         }
       });
 
@@ -571,6 +686,13 @@ const VideoCall = () => {
             offerToReceiveAudio: true,
             offerToReceiveVideo: true
           });
+          
+          // Enhance SDP with quality settings
+          if (answer.sdp) {
+            answer.sdp = enhanceSDPForQuality(answer.sdp);
+            console.log('✅ SDP enhanced for quality');
+          }
+          
           console.log('Answer created:', answer.type);
           await pc.setLocalDescription(answer);
           console.log('Local description set (answer)');
@@ -590,6 +712,13 @@ const VideoCall = () => {
             offerToReceiveAudio: true,
             offerToReceiveVideo: true
           });
+          
+          // Enhance SDP with quality settings
+          if (offer.sdp) {
+            offer.sdp = enhanceSDPForQuality(offer.sdp);
+            console.log('✅ SDP enhanced for quality');
+          }
+          
           console.log('Offer created:', offer.type);
           await pc.setLocalDescription(offer);
           console.log('Local description set (offer)');
@@ -750,7 +879,11 @@ const VideoCall = () => {
             ref={remoteVideoRef} 
             autoPlay 
             playsInline
-            className="remote-video-full" 
+            className="remote-video-full"
+            style={{
+              objectFit: 'cover',  // Ensure video covers entire area
+              backgroundColor: '#000'  // Black background while loading
+            }}
           />
           
           {/* Local video (self) */}
@@ -759,7 +892,10 @@ const VideoCall = () => {
             autoPlay 
             muted 
             playsInline
-            className="local-video-full" 
+            className="local-video-full"
+            style={{
+              objectFit: 'cover'  // Ensure video covers entire area
+            }}
           />
 
           {!isInCall && (
