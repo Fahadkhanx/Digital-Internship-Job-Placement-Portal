@@ -13,11 +13,13 @@ namespace InternshipPortal.API.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IEmailService _emailService;
 
-        public AuthService(ApplicationDbContext context, IConfiguration configuration)
+        public AuthService(ApplicationDbContext context, IConfiguration configuration, IEmailService emailService)
         {
             _context = context;
             _configuration = configuration;
+            _emailService = emailService;
         }
 
         public async Task<string> RegisterStudentAsync(string email, string password, string firstName, string lastName)
@@ -141,6 +143,75 @@ namespace InternshipPortal.API.Services
             }
 
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<bool> RequestPasswordResetAsync(string email)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            
+            if (user == null)
+            {
+                // Don't reveal if email exists or not (security best practice)
+                return true;
+            }
+
+            // Invalidate any existing reset tokens for this user
+            var existingTokens = await _context.PasswordResetTokens
+                .Where(t => t.UserId == user.UserId && !t.Used && t.ExpiresAt > DateTime.UtcNow)
+                .ToListAsync();
+            
+            foreach (var token in existingTokens)
+            {
+                token.Used = true;
+            }
+
+            // Generate new reset token
+            var resetToken = Guid.NewGuid().ToString() + Guid.NewGuid().ToString();
+            var tokenEntity = new PasswordResetToken
+            {
+                UserId = user.UserId,
+                Token = resetToken,
+                ExpiresAt = DateTime.UtcNow.AddHours(24), // Token valid for 24 hours
+                Used = false
+            };
+
+            _context.PasswordResetTokens.Add(tokenEntity);
+            await _context.SaveChangesAsync();
+
+            // Send email with reset link
+            await _emailService.SendPasswordResetEmailAsync(user.Email, resetToken);
+
+            return true;
+        }
+
+        public async Task<bool> VerifyResetTokenAsync(string token)
+        {
+            var resetToken = await _context.PasswordResetTokens
+                .FirstOrDefaultAsync(t => t.Token == token && !t.Used && t.ExpiresAt > DateTime.UtcNow);
+
+            return resetToken != null;
+        }
+
+        public async Task<bool> ResetPasswordAsync(string token, string newPassword)
+        {
+            var resetToken = await _context.PasswordResetTokens
+                .Include(t => t.User)
+                .FirstOrDefaultAsync(t => t.Token == token && !t.Used && t.ExpiresAt > DateTime.UtcNow);
+
+            if (resetToken == null || resetToken.User == null)
+            {
+                return false;
+            }
+
+            // Update password
+            resetToken.User.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            
+            // Mark token as used
+            resetToken.Used = true;
+
             await _context.SaveChangesAsync();
 
             return true;

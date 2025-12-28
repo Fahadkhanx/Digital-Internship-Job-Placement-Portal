@@ -1,8 +1,10 @@
 using InternshipPortal.API.Data;
 using InternshipPortal.API.Models;
+using InternshipPortal.API.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace InternshipPortal.API.Controllers
 {
@@ -11,10 +13,12 @@ namespace InternshipPortal.API.Controllers
     public class JobsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IJobService _jobService;
 
-        public JobsController(ApplicationDbContext context)
+        public JobsController(ApplicationDbContext context, IJobService jobService)
         {
             _context = context;
+            _jobService = jobService;
         }
 
         [HttpGet]
@@ -409,6 +413,106 @@ namespace InternshipPortal.API.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(new { success = true, message = "Job deleted successfully" });
+        }
+
+        [Authorize(Roles = "Student")]
+        [HttpGet("matched")]
+        public async Task<IActionResult> GetMatchedJobs(
+            [FromQuery] int page = 1,
+            [FromQuery] int limit = 10)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                
+                // Get student ID from user ID
+                var student = await _context.Students
+                    .FirstOrDefaultAsync(s => s.UserId == userId);
+
+                if (student == null)
+                {
+                    return NotFound(new { success = false, message = "Student profile not found" });
+                }
+
+                var matchedJobs = await _jobService.GetMatchedJobsForStudentAsync(student.StudentId, page, limit);
+
+                var jobs = matchedJobs.Select(mj => new
+                {
+                    mj.Job.JobId,
+                    mj.Job.Title,
+                    mj.Job.Description,
+                    mj.Job.JobType,
+                    mj.Job.Location,
+                    mj.Job.RemoteOption,
+                    mj.Job.SalaryMin,
+                    mj.Job.SalaryMax,
+                    mj.Job.Currency,
+                    mj.Job.RequiredSkills,
+                    mj.Job.ExperienceLevel,
+                    mj.Job.ApplicationDeadline,
+                    mj.Job.CreatedAt,
+                    CompanyName = mj.Job.Employer?.CompanyName,
+                    CompanyLogo = mj.Job.Employer?.LogoUrl,
+                    MatchScore = mj.MatchScore,
+                    MatchedSkillsCount = mj.MatchedSkillsCount,
+                    TotalRequiredSkills = mj.TotalRequiredSkills,
+                    MatchedSkills = mj.MatchedSkills,
+                    MissingSkills = mj.MissingSkills
+                }).ToList();
+
+                return Ok(new
+                {
+                    success = true,
+                    jobs,
+                    pagination = new
+                    {
+                        page,
+                        limit,
+                        total = matchedJobs.Count
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [Authorize(Roles = "Student")]
+        [HttpGet("{id}/match-score")]
+        public async Task<IActionResult> GetJobMatchScore(int id)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                
+                var student = await _context.Students
+                    .FirstOrDefaultAsync(s => s.UserId == userId);
+
+                if (student == null)
+                {
+                    return NotFound(new { success = false, message = "Student profile not found" });
+                }
+
+                var matchScore = await _jobService.CalculateMatchScoreAsync(id, student.StudentId);
+
+                return Ok(new
+                {
+                    success = true,
+                    matchScore = new
+                    {
+                        score = matchScore.Score,
+                        matchedSkillsCount = matchScore.MatchedSkillsCount,
+                        totalRequiredSkills = matchScore.TotalRequiredSkills,
+                        matchedSkills = matchScore.MatchedSkills,
+                        missingSkills = matchScore.MissingSkills
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
         }
     }
 

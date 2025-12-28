@@ -99,6 +99,63 @@ namespace InternshipPortal.API.Controllers
                 return BadRequest(new { success = false, message = ex.Message });
             }
         }
+
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+        {
+            try
+            {
+                var success = await _authService.RequestPasswordResetAsync(request.Email);
+                
+                // Always return success for security (don't reveal if email exists)
+                return Ok(new { 
+                    success = true, 
+                    message = "If an account with that email exists, a password reset link has been sent." 
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("verify-reset-token")]
+        public async Task<IActionResult> VerifyResetToken([FromBody] VerifyResetTokenRequest request)
+        {
+            try
+            {
+                var isValid = await _authService.VerifyResetTokenAsync(request.Token);
+                
+                return Ok(new { 
+                    success = true, 
+                    isValid 
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+        {
+            try
+            {
+                var success = await _authService.ResetPasswordAsync(request.Token, request.NewPassword);
+                
+                if (success)
+                {
+                    return Ok(new { success = true, message = "Password reset successfully" });
+                }
+
+                return BadRequest(new { success = false, message = "Invalid or expired reset token" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
     }
 
     public class RegisterStudentRequest
@@ -125,6 +182,22 @@ namespace InternshipPortal.API.Controllers
     public class ChangePasswordRequest
     {
         public string CurrentPassword { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
+    }
+
+    public class ForgotPasswordRequest
+    {
+        public string Email { get; set; } = string.Empty;
+    }
+
+    public class VerifyResetTokenRequest
+    {
+        public string Token { get; set; } = string.Empty;
+    }
+
+    public class ResetPasswordRequest
+    {
+        public string Token { get; set; } = string.Empty;
         public string NewPassword { get; set; } = string.Empty;
     }
 }
