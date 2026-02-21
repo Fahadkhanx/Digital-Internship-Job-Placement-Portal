@@ -131,6 +131,38 @@ namespace InternshipPortal.API.Services
 
             return await SendEmailAsync(email, subject, body);
         }
+
+        public async Task<bool> SendVerificationCodeEmailAsync(string email, string verificationCode)
+        {
+            var subject = "Email Verification Code - Internship Portal";
+            var body = $@"
+                <html>
+                <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+                    <div style='max-width: 600px; margin: 0 auto; padding: 20px;'>
+                        <h2 style='color: #3498db;'>Email Verification</h2>
+                        <p>Hello,</p>
+                        <p>Thank you for registering with Internship Portal!</p>
+                        <p>Please use the following verification code to activate your account:</p>
+                        <div style='text-align: center; margin: 30px 0;'>
+                            <div style='background-color: #f8f9fa; border: 2px solid #3498db; 
+                                        border-radius: 8px; padding: 20px; display: inline-block;'>
+                                <h1 style='color: #3498db; margin: 0; font-size: 36px; letter-spacing: 5px;'>
+                                    {verificationCode}
+                                </h1>
+                            </div>
+                        </div>
+                        <p><strong>This code will expire in 10 minutes.</strong></p>
+                        <p>If you did not create an account, please ignore this email.</p>
+                        <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'>
+                        <p style='font-size: 12px; color: #7f8c8d;'>
+                            This is an automated email. Please do not reply.
+                        </p>
+                    </div>
+                </body>
+                </html>";
+
+            return await SendEmailAsync(email, subject, body);
+        }
     }
 }
 

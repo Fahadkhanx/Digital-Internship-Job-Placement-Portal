@@ -44,6 +44,15 @@ namespace InternshipPortal.API.Data
                       );
                 entity.Property(e => e.IsVerified).HasColumnName("is_verified");
                 entity.Property(e => e.IsActive).HasColumnName("is_active");
+                entity.Property(e => e.IsBanned).HasColumnName("is_banned");
+                entity.Property(e => e.BannedUntil).HasColumnName("banned_until");
+                entity.Property(e => e.BanReason).HasColumnName("ban_reason");
+                entity.Property(e => e.VerificationCode).HasColumnName("verification_code");
+                entity.Property(e => e.VerificationCodeExpiresAt).HasColumnName("verification_code_expires_at");
+                entity.Property(e => e.VerificationAttempts).HasColumnName("verification_attempts");
+                entity.Property(e => e.LastVerificationAttemptAt).HasColumnName("last_verification_attempt_at");
+                entity.Property(e => e.ResendCodeAttempts).HasColumnName("resend_code_attempts");
+                entity.Property(e => e.LastResendCodeAt).HasColumnName("last_resend_code_at");
                 entity.Property(e => e.CreatedAt).HasColumnName("created_at");
                 entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
                 entity.HasIndex(e => e.Email).IsUnique();

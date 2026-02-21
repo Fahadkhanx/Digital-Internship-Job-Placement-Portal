@@ -20,14 +20,19 @@ namespace InternshipPortal.API.Controllers
         {
             try
             {
-                var token = await _authService.RegisterStudentAsync(
+                var result = await _authService.RegisterStudentAsync(
                     request.Email,
                     request.Password,
                     request.FirstName,
                     request.LastName
                 );
 
-                return Ok(new { success = true, message = "Student registered successfully", token });
+                return Ok(new { 
+                    success = result.Success, 
+                    message = result.Message,
+                    userId = result.UserId,
+                    email = result.Email
+                });
             }
             catch (Exception ex)
             {
@@ -40,13 +45,58 @@ namespace InternshipPortal.API.Controllers
         {
             try
             {
-                var message = await _authService.RegisterEmployerAsync(
+                var result = await _authService.RegisterEmployerAsync(
                     request.Email,
                     request.Password,
                     request.CompanyName
                 );
 
-                return Ok(new { success = true, message });
+                return Ok(new { 
+                    success = result.Success, 
+                    message = result.Message,
+                    userId = result.UserId,
+                    email = result.Email
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("verify-email")]
+        public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailRequest request)
+        {
+            try
+            {
+                var success = await _authService.VerifyEmailCodeAsync(request.Email, request.Code);
+                
+                if (success)
+                {
+                    return Ok(new { success = true, message = "Email verified successfully" });
+                }
+
+                return BadRequest(new { success = false, message = "Invalid verification code" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("resend-verification-code")]
+        public async Task<IActionResult> ResendVerificationCode([FromBody] ResendVerificationCodeRequest request)
+        {
+            try
+            {
+                var success = await _authService.ResendVerificationCodeAsync(request.Email);
+                
+                if (success)
+                {
+                    return Ok(new { success = true, message = "Verification code sent successfully" });
+                }
+
+                return BadRequest(new { success = false, message = "Failed to send verification code" });
             }
             catch (Exception ex)
             {
@@ -199,6 +249,17 @@ namespace InternshipPortal.API.Controllers
     {
         public string Token { get; set; } = string.Empty;
         public string NewPassword { get; set; } = string.Empty;
+    }
+
+    public class VerifyEmailRequest
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Code { get; set; } = string.Empty;
+    }
+
+    public class ResendVerificationCodeRequest
+    {
+        public string Email { get; set; } = string.Empty;
     }
 }
 
