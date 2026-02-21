@@ -143,7 +143,7 @@ namespace InternshipPortal.API.Controllers
         }
 
         [HttpPut("employers/{id}/reject")]
-        public async Task<IActionResult> RejectEmployer(int id, [FromBody] RejectEmployerRequest? request = null)
+        public async Task<IActionResult> RejectEmployer(int id)
         {
             try
             {
@@ -203,6 +203,288 @@ namespace InternshipPortal.API.Controllers
                 return StatusCode(500, new { success = false, message = "An error occurred while fetching stats", details = ex.Message });
             }
         }
+
+        [HttpGet("users")]
+        public async Task<IActionResult> GetAllUsers([FromQuery] string? userType, [FromQuery] string? status)
+        {
+            try
+            {
+                var query = _context.Users.AsQueryable();
+
+                // Filter by user type
+                if (!string.IsNullOrEmpty(userType) && Enum.TryParse<UserType>(userType, true, out var type))
+                {
+                    query = query.Where(u => u.UserType == type);
+                }
+
+                // Filter by status
+                if (!string.IsNullOrEmpty(status))
+                {
+                    switch (status.ToLower())
+                    {
+                        case "active":
+                            query = query.Where(u => u.IsActive && !u.IsBanned);
+                            break;
+                        case "inactive":
+                            query = query.Where(u => !u.IsActive);
+                            break;
+                        case "banned":
+                            query = query.Where(u => u.IsBanned);
+                            break;
+                    }
+                }
+
+                var users = await query
+                    .OrderByDescending(u => u.CreatedAt)
+                    .Select(u => new
+                    {
+                        u.UserId,
+                        u.Email,
+                        UserType = u.UserType.ToString(),
+                        u.IsVerified,
+                        u.IsActive,
+                        u.IsBanned,
+                        u.BannedUntil,
+                        u.BanReason,
+                        u.CreatedAt,
+                        u.UpdatedAt
+                    })
+                    .ToListAsync();
+
+                return Ok(new { success = true, users });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = "An error occurred while fetching users", details = ex.Message });
+            }
+        }
+
+        [HttpPut("users/{id}/ban")]
+        public async Task<IActionResult> BanUser(int id, [FromBody] BanUserRequest request)
+        {
+            try
+            {
+                var user = await _context.Users.FindAsync(id);
+                if (user == null)
+                {
+                    return NotFound(new { success = false, message = "User not found" });
+                }
+
+                // Prevent banning admin users
+                if (user.UserType == UserType.Admin)
+                {
+                    return BadRequest(new { success = false, message = "Cannot ban admin users" });
+                }
+
+                user.IsBanned = true;
+                user.IsActive = false;
+
+                if (request.Duration == "permanent")
+                {
+                    user.BannedUntil = null; // Permanent ban
+                }
+                else if (request.Duration == "3days")
+                {
+                    user.BannedUntil = DateTime.UtcNow.AddDays(3);
+                }
+                else
+                {
+                    return BadRequest(new { success = false, message = "Invalid duration. Use '3days' or 'permanent'" });
+                }
+
+                user.BanReason = request.Reason;
+                user.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = $"User banned {(request.Duration == "permanent" ? "permanently" : "for 3 days")}" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = "An error occurred while banning user", details = ex.Message });
+            }
+        }
+
+        [HttpPut("users/{id}/unban")]
+        public async Task<IActionResult> UnbanUser(int id)
+        {
+            try
+            {
+                var user = await _context.Users.FindAsync(id);
+                if (user == null)
+                {
+                    return NotFound(new { success = false, message = "User not found" });
+                }
+
+                user.IsBanned = false;
+                user.IsActive = true;
+                user.BannedUntil = null;
+                user.BanReason = null;
+                user.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "User unbanned successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = "An error occurred while unbanning user", details = ex.Message });
+            }
+        }
+
+        [HttpPut("users/{id}/deactivate")]
+        public async Task<IActionResult> DeactivateUser(int id, [FromBody] DeactivateUserRequest request)
+        {
+            try
+            {
+                var user = await _context.Users.FindAsync(id);
+                if (user == null)
+                {
+                    return NotFound(new { success = false, message = "User not found" });
+                }
+
+                // Prevent deactivating admin users
+                if (user.UserType == UserType.Admin)
+                {
+                    return BadRequest(new { success = false, message = "Cannot deactivate admin users" });
+                }
+
+                user.IsActive = false;
+
+                if (request.Duration == "permanent")
+                {
+                    // Permanent deactivation
+                }
+                else if (request.Duration == "3days")
+                {
+                    // For 3 days - we can use BannedUntil field to track this
+                    user.BannedUntil = DateTime.UtcNow.AddDays(3);
+                }
+                else
+                {
+                    return BadRequest(new { success = false, message = "Invalid duration. Use '3days' or 'permanent'" });
+                }
+
+                user.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = $"User deactivated {(request.Duration == "permanent" ? "permanently" : "for 3 days")}" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = "An error occurred while deactivating user", details = ex.Message });
+            }
+        }
+
+        [HttpPut("users/{id}/activate")]
+        public async Task<IActionResult> ActivateUser(int id)
+        {
+            try
+            {
+                var user = await _context.Users.FindAsync(id);
+                if (user == null)
+                {
+                    return NotFound(new { success = false, message = "User not found" });
+                }
+
+                user.IsActive = true;
+                user.BannedUntil = null;
+                user.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "User activated successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = "An error occurred while activating user", details = ex.Message });
+            }
+        }
+
+        [HttpPut("users/{id}/role")]
+        public async Task<IActionResult> ChangeUserRole(int id, [FromBody] ChangeRoleRequest request)
+        {
+            try
+            {
+                var user = await _context.Users.FindAsync(id);
+                if (user == null)
+                {
+                    return NotFound(new { success = false, message = "User not found" });
+                }
+
+                if (!Enum.TryParse<UserType>(request.UserType, true, out var newUserType))
+                {
+                    return BadRequest(new { success = false, message = "Invalid user type. Use 'Student', 'Employer', or 'Admin'" });
+                }
+
+                user.UserType = newUserType;
+                user.UpdatedAt = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = $"User role changed to {newUserType}" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = "An error occurred while changing user role", details = ex.Message });
+            }
+        }
+
+        [HttpDelete("users/{id}")]
+        public async Task<IActionResult> DeleteUser(int id)
+        {
+            try
+            {
+                var user = await _context.Users.FindAsync(id);
+                if (user == null)
+                {
+                    return NotFound(new { success = false, message = "User not found" });
+                }
+
+                // Prevent deleting admin users
+                if (user.UserType == UserType.Admin)
+                {
+                    return BadRequest(new { success = false, message = "Cannot delete admin users" });
+                }
+
+                // Get current admin user ID
+                var currentAdminId = GetUserId();
+                
+                // Prevent admin from deleting themselves
+                if (user.UserId == currentAdminId)
+                {
+                    return BadRequest(new { success = false, message = "Cannot delete your own account" });
+                }
+
+                // Delete user (cascade delete will handle related records)
+                _context.Users.Remove(user);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, message = "User deleted successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = "An error occurred while deleting user", details = ex.Message });
+            }
+        }
+    }
+
+    public class BanUserRequest
+    {
+        public string Duration { get; set; } = string.Empty; // "3days" or "permanent"
+        public string? Reason { get; set; }
+    }
+
+    public class DeactivateUserRequest
+    {
+        public string Duration { get; set; } = string.Empty; // "3days" or "permanent"
+        public string? Reason { get; set; }
+    }
+
+    public class ChangeRoleRequest
+    {
+        public string UserType { get; set; } = string.Empty; // "Student", "Employer", or "Admin"
     }
 
     public class RejectEmployerRequest

@@ -23,6 +23,17 @@ namespace InternshipPortal.API.Models
 
         public bool IsVerified { get; set; } = false;
         public bool IsActive { get; set; } = true;
+        public bool IsBanned { get; set; } = false;
+        public DateTime? BannedUntil { get; set; }
+        public string? BanReason { get; set; }
+
+        // Email verification code fields
+        public string? VerificationCode { get; set; }
+        public DateTime? VerificationCodeExpiresAt { get; set; }
+        public int VerificationAttempts { get; set; } = 0;
+        public DateTime? LastVerificationAttemptAt { get; set; }
+        public int ResendCodeAttempts { get; set; } = 0;
+        public DateTime? LastResendCodeAt { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

@@ -68,14 +68,9 @@ const Register = () => {
       }
 
       if (response.success) {
-        toast.success('Registration successful!');
-        if (userType === 'student' && response.token) {
-          localStorage.setItem('user', JSON.stringify({ userType: 'Student', email: formData.email }));
-          navigate('/student/dashboard');
-        } else {
-          toast.info('Employer registration pending verification. Please login after verification.');
-          navigate('/login');
-        }
+        toast.success('Registration successful! Please check your email for verification code.');
+        // Redirect to verification page
+        navigate('/verify-email', { state: { email: formData.email } });
       }
     } catch (error) {
       const errorMessage = error.response?.data?.message || error.message || 'Registration failed. Please try again.';

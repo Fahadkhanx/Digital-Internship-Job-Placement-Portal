@@ -7,10 +7,12 @@ namespace InternshipPortal.API.Services
     public class ApplicationService : IApplicationService
     {
         private readonly ApplicationDbContext _context;
+        private readonly INotificationService _notificationService;
 
-        public ApplicationService(ApplicationDbContext context)
+        public ApplicationService(ApplicationDbContext context, INotificationService notificationService)
         {
             _context = context;
+            _notificationService = notificationService;
         }
 
         public async Task<Application> ApplyForJobAsync(int userId, int jobId, string? coverLetter)
@@ -52,6 +54,23 @@ namespace InternshipPortal.API.Services
             _context.Applications.Add(application);
             await _context.SaveChangesAsync();
 
+            // Create notification for employer
+            var jobWithEmployer = await _context.JobPostings
+                .Include(j => j.Employer)
+                    .ThenInclude(e => e.User)
+                .FirstOrDefaultAsync(j => j.JobId == jobId);
+            
+            if (jobWithEmployer?.Employer?.User != null)
+            {
+                await _notificationService.CreateNotificationAsync(
+                    jobWithEmployer.Employer.User.UserId,
+                    "new_application",
+                    "New Application Received",
+                    $"A new application has been received for the position: {jobWithEmployer.Title}",
+                    $"/employer/dashboard"
+                );
+            }
+
             return application;
         }
 
@@ -66,6 +85,7 @@ namespace InternshipPortal.API.Services
             return await _context.Applications
                 .Include(a => a.Job)
                     .ThenInclude(j => j.Employer)
+                        .ThenInclude(e => e.User)
                 .Where(a => a.StudentId == student.StudentId)
                 .OrderByDescending(a => a.AppliedAt)
                 .ToListAsync();
@@ -89,6 +109,9 @@ namespace InternshipPortal.API.Services
             return await _context.Applications
                 .Include(a => a.Student)
                     .ThenInclude(s => s.User)
+                .Include(a => a.Job)
+                    .ThenInclude(j => j.Employer)
+                        .ThenInclude(e => e.User)
                 .Where(a => a.JobId == jobId)
                 .OrderByDescending(a => a.AppliedAt)
                 .ToListAsync();
@@ -143,10 +166,36 @@ namespace InternshipPortal.API.Services
                 throw new Exception("You don't have permission to update this application");
             }
 
+            var oldStatus = application.Status;
             application.Status = status;
             application.ReviewedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+
+            // Create notification for student about status change
+            var student = await _context.Students
+                .Include(s => s.User)
+                .FirstOrDefaultAsync(s => s.StudentId == application.StudentId);
+            
+            if (student?.User != null && oldStatus != status)
+            {
+                string statusMessage = status switch
+                {
+                    ApplicationStatus.Reviewed => "Your application has been reviewed",
+                    ApplicationStatus.Shortlisted => "Congratulations! You have been shortlisted",
+                    ApplicationStatus.Accepted => "Congratulations! Your application has been accepted",
+                    ApplicationStatus.Rejected => "Your application status has been updated",
+                    _ => "Your application status has been updated"
+                };
+
+                await _notificationService.CreateNotificationAsync(
+                    student.User.UserId,
+                    "application_status",
+                    $"Application Status: {status}",
+                    $"{statusMessage} for the position: {application.Job?.Title ?? "N/A"}",
+                    $"/student/applications"
+                );
+            }
 
             return application;
         }

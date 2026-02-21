@@ -6,16 +6,33 @@ import './Dashboard.css';
 
 const AdminDashboard = () => {
   const [employers, setEmployers] = useState([]);
+  const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [usersLoading, setUsersLoading] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
+  const [userFilterType, setUserFilterType] = useState('all');
+  const [userFilterStatus, setUserFilterStatus] = useState('all');
   const [selectedEmployer, setSelectedEmployer] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [activeTab, setActiveTab] = useState('employers'); // 'employers' or 'users'
+  const [showBanModal, setShowBanModal] = useState(false);
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [banDuration, setBanDuration] = useState('3days');
+  const [banReason, setBanReason] = useState('');
+  const [deactivateDuration, setDeactivateDuration] = useState('3days');
+  const [newRole, setNewRole] = useState('Student');
 
   useEffect(() => {
     fetchStats();
-    fetchEmployers();
-  }, [filterStatus]);
+    if (activeTab === 'employers') {
+      fetchEmployers();
+    } else if (activeTab === 'users') {
+      fetchUsers();
+    }
+  }, [filterStatus, activeTab, userFilterType, userFilterStatus]);
 
   const fetchStats = async () => {
     try {
@@ -46,6 +63,28 @@ const AdminDashboard = () => {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      setUsersLoading(true);
+      let url = '/admin/users?';
+      if (userFilterType !== 'all') {
+        url += `userType=${userFilterType}&`;
+      }
+      if (userFilterStatus !== 'all') {
+        url += `status=${userFilterStatus}`;
+      }
+      const response = await api.get(url);
+      if (response.data.success) {
+        setUsers(response.data.users || []);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      toast.error('Failed to load users');
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
   const handleVerify = async (employerId) => {
     if (!window.confirm('Are you sure you want to verify this employer?')) return;
     
@@ -69,7 +108,7 @@ const AdminDashboard = () => {
     if (!window.confirm('Are you sure you want to reject this employer?')) return;
     
     try {
-      const response = await api.put(`/admin/employers/${employerId}/reject`);
+      const response = await api.put(`/admin/employers/${employerId}/reject`, {});
       if (response.data.success) {
         toast.success('Employer rejected successfully');
         fetchEmployers();
@@ -110,12 +149,144 @@ const AdminDashboard = () => {
     );
   };
 
+  const handleBanUser = async () => {
+    if (!selectedUser) return;
+    
+    try {
+      const response = await api.put(`/admin/users/${selectedUser.userId}/ban`, {
+        duration: banDuration,
+        reason: banReason
+      });
+      if (response.data.success) {
+        toast.success(response.data.message);
+        setShowBanModal(false);
+        setSelectedUser(null);
+        setBanReason('');
+        fetchUsers();
+        fetchStats();
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to ban user');
+    }
+  };
+
+  const handleUnbanUser = async (userId) => {
+    if (!window.confirm('Are you sure you want to unban this user?')) return;
+    
+    try {
+      const response = await api.put(`/admin/users/${userId}/unban`);
+      if (response.data.success) {
+        toast.success(response.data.message);
+        fetchUsers();
+        fetchStats();
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to unban user');
+    }
+  };
+
+  const handleDeactivateUser = async () => {
+    if (!selectedUser) return;
+    
+    try {
+      const response = await api.put(`/admin/users/${selectedUser.userId}/deactivate`, {
+        duration: deactivateDuration,
+        reason: banReason
+      });
+      if (response.data.success) {
+        toast.success(response.data.message);
+        setShowDeactivateModal(false);
+        setSelectedUser(null);
+        setBanReason('');
+        fetchUsers();
+        fetchStats();
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to deactivate user');
+    }
+  };
+
+  const handleActivateUser = async (userId) => {
+    if (!window.confirm('Are you sure you want to activate this user?')) return;
+    
+    try {
+      const response = await api.put(`/admin/users/${userId}/activate`);
+      if (response.data.success) {
+        toast.success(response.data.message);
+        fetchUsers();
+        fetchStats();
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to activate user');
+    }
+  };
+
+  const handleChangeRole = async () => {
+    if (!selectedUser) return;
+    
+    try {
+      const response = await api.put(`/admin/users/${selectedUser.userId}/role`, {
+        userType: newRole
+      });
+      if (response.data.success) {
+        toast.success(response.data.message);
+        setShowRoleModal(false);
+        setSelectedUser(null);
+        fetchUsers();
+        fetchStats();
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to change user role');
+    }
+  };
+
+  const handleDeleteUser = async (userId, userEmail) => {
+    if (!window.confirm(`Are you sure you want to delete user "${userEmail}"? This action cannot be undone and will delete all associated data.`)) return;
+    
+    try {
+      const response = await api.delete(`/admin/users/${userId}`);
+      if (response.data.success) {
+        toast.success(response.data.message);
+        fetchUsers();
+        fetchStats();
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to delete user');
+    }
+  };
+
+  const getUserStatusBadge = (user) => {
+    if (user.isBanned) {
+      return <span className="status-badge status-rejected">Banned</span>;
+    }
+    if (!user.isActive) {
+      return <span className="status-badge status-pending">Inactive</span>;
+    }
+    return <span className="status-badge status-verified">Active</span>;
+  };
+
   return (
     <div className="dashboard">
       <div className="container">
         <div className="dashboard-header">
           <h1>Admin Dashboard</h1>
-          <p>Manage employer verifications and system statistics</p>
+          <p>Manage users, employers, and system statistics</p>
+        </div>
+
+        {/* Tabs */}
+        <div className="dashboard-tabs">
+          <button
+            className={`tab-btn ${activeTab === 'employers' ? 'active' : ''}`}
+            onClick={() => setActiveTab('employers')}
+          >
+            Employers
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
+            onClick={() => setActiveTab('users')}
+          >
+            All Users
+          </button>
         </div>
 
         {stats && (
@@ -159,6 +330,7 @@ const AdminDashboard = () => {
         )}
 
         <div className="dashboard-sections">
+          {activeTab === 'employers' && (
           <div className="dashboard-section">
             <div className="section-header">
               <h2>Employer Verifications</h2>
@@ -250,6 +422,165 @@ const AdminDashboard = () => {
               </div>
             )}
           </div>
+          )}
+
+          {activeTab === 'users' && (
+          <div className="dashboard-section">
+            <div className="section-header">
+              <h2>User Management</h2>
+              <div className="filter-buttons">
+                <button
+                  className={`filter-btn ${userFilterType === 'all' ? 'active' : ''}`}
+                  onClick={() => setUserFilterType('all')}
+                >
+                  All Types
+                </button>
+                <button
+                  className={`filter-btn ${userFilterType === 'Student' ? 'active' : ''}`}
+                  onClick={() => setUserFilterType('Student')}
+                >
+                  Students
+                </button>
+                <button
+                  className={`filter-btn ${userFilterType === 'Employer' ? 'active' : ''}`}
+                  onClick={() => setUserFilterType('Employer')}
+                >
+                  Employers
+                </button>
+                <button
+                  className={`filter-btn ${userFilterType === 'Admin' ? 'active' : ''}`}
+                  onClick={() => setUserFilterType('Admin')}
+                >
+                  Admins
+                </button>
+              </div>
+              <div className="filter-buttons" style={{ marginTop: '10px' }}>
+                <button
+                  className={`filter-btn ${userFilterStatus === 'all' ? 'active' : ''}`}
+                  onClick={() => setUserFilterStatus('all')}
+                >
+                  All Status
+                </button>
+                <button
+                  className={`filter-btn ${userFilterStatus === 'active' ? 'active' : ''}`}
+                  onClick={() => setUserFilterStatus('active')}
+                >
+                  Active
+                </button>
+                <button
+                  className={`filter-btn ${userFilterStatus === 'inactive' ? 'active' : ''}`}
+                  onClick={() => setUserFilterStatus('inactive')}
+                >
+                  Inactive
+                </button>
+                <button
+                  className={`filter-btn ${userFilterStatus === 'banned' ? 'active' : ''}`}
+                  onClick={() => setUserFilterStatus('banned')}
+                >
+                  Banned
+                </button>
+              </div>
+            </div>
+
+            {usersLoading ? (
+              <LoadingSpinner message="Loading users..." />
+            ) : users.length === 0 ? (
+              <div className="empty-state">
+                <p>No users found.</p>
+              </div>
+            ) : (
+              <div className="users-list">
+                {users.map((user) => (
+                  <div key={user.userId} className="user-item">
+                    <div className="user-item-content">
+                      <div className="user-header">
+                        <h3>{user.email}</h3>
+                        {getUserStatusBadge(user)}
+                      </div>
+                      <div className="user-info">
+                        <p><strong>User ID:</strong> {user.userId}</p>
+                        <p><strong>Type:</strong> {user.userType}</p>
+                        <p><strong>Verified:</strong> {user.isVerified ? 'Yes' : 'No'}</p>
+                        {user.isBanned && user.bannedUntil && (
+                          <p><strong>Banned Until:</strong> {new Date(user.bannedUntil).toLocaleString()}</p>
+                        )}
+                        {user.banReason && (
+                          <p><strong>Reason:</strong> {user.banReason}</p>
+                        )}
+                        <p><strong>Created:</strong> {new Date(user.createdAt).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <div className="user-item-actions">
+                      {!user.isBanned && user.isActive && (
+                        <>
+                          <button
+                            className="btn-ban"
+                            onClick={() => {
+                              setSelectedUser(user);
+                              setShowBanModal(true);
+                            }}
+                          >
+                            🚫 Ban
+                          </button>
+                          <button
+                            className="btn-deactivate"
+                            onClick={() => {
+                              setSelectedUser(user);
+                              setShowDeactivateModal(true);
+                            }}
+                          >
+                            ⏸ Deactivate
+                          </button>
+                        </>
+                      )}
+                      {user.isBanned && (
+                        <button
+                          className="btn-verify"
+                          onClick={() => handleUnbanUser(user.userId)}
+                        >
+                          ✅ Unban
+                        </button>
+                      )}
+                      {!user.isActive && !user.isBanned && (
+                        <button
+                          className="btn-verify"
+                          onClick={() => handleActivateUser(user.userId)}
+                        >
+                          ✅ Activate
+                        </button>
+                      )}
+                      <button
+                        className="btn-view"
+                        onClick={() => {
+                          setSelectedUser(user);
+                          // Set default to different role than current
+                          if (user.userType === 'Student') {
+                            setNewRole('Employer');
+                          } else if (user.userType === 'Employer') {
+                            setNewRole('Student');
+                          } else {
+                            setNewRole('Student');
+                          }
+                          setShowRoleModal(true);
+                        }}
+                      >
+                        🔄 Change Role
+                      </button>
+                      {user.userType !== 'Admin' && (
+                        <button
+                          className="btn-delete"
+                          onClick={() => handleDeleteUser(user.userId, user.email)}
+                        >
+                          🗑️ Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          )}
         </div>
       </div>
 
@@ -374,6 +705,122 @@ const AdminDashboard = () => {
               )}
               <button className="btn-secondary" onClick={() => { setShowDetails(false); setSelectedEmployer(null); }}>
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ban User Modal */}
+      {showBanModal && selectedUser && (
+        <div className="modal-overlay" onClick={() => { setShowBanModal(false); setSelectedUser(null); setBanReason(''); }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Ban User: {selectedUser.email}</h2>
+              <button className="modal-close" onClick={() => { setShowBanModal(false); setSelectedUser(null); setBanReason(''); }}>
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Duration</label>
+                <select value={banDuration} onChange={(e) => setBanDuration(e.target.value)}>
+                  <option value="3days">3 Days</option>
+                  <option value="permanent">Permanent</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Reason (Optional)</label>
+                <textarea
+                  value={banReason}
+                  onChange={(e) => setBanReason(e.target.value)}
+                  placeholder="Enter reason for banning this user..."
+                  rows="3"
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-ban" onClick={handleBanUser}>
+                Ban User
+              </button>
+              <button className="btn-secondary" onClick={() => { setShowBanModal(false); setSelectedUser(null); setBanReason(''); }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deactivate User Modal */}
+      {showDeactivateModal && selectedUser && (
+        <div className="modal-overlay" onClick={() => { setShowDeactivateModal(false); setSelectedUser(null); setBanReason(''); }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Deactivate User: {selectedUser.email}</h2>
+              <button className="modal-close" onClick={() => { setShowDeactivateModal(false); setSelectedUser(null); setBanReason(''); }}>
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Duration</label>
+                <select value={deactivateDuration} onChange={(e) => setDeactivateDuration(e.target.value)}>
+                  <option value="3days">3 Days</option>
+                  <option value="permanent">Permanent</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Reason (Optional)</label>
+                <textarea
+                  value={banReason}
+                  onChange={(e) => setBanReason(e.target.value)}
+                  placeholder="Enter reason for deactivating this user..."
+                  rows="3"
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-deactivate" onClick={handleDeactivateUser}>
+                Deactivate User
+              </button>
+              <button className="btn-secondary" onClick={() => { setShowDeactivateModal(false); setSelectedUser(null); setBanReason(''); }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Role Modal */}
+      {showRoleModal && selectedUser && (
+        <div className="modal-overlay" onClick={() => { setShowRoleModal(false); setSelectedUser(null); }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Change Role: {selectedUser.email}</h2>
+              <button className="modal-close" onClick={() => { setShowRoleModal(false); setSelectedUser(null); }}>
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Current Role: {selectedUser.userType}</label>
+                <label>New Role</label>
+                <select value={newRole} onChange={(e) => setNewRole(e.target.value)}>
+                  <option value="Student">Student</option>
+                  <option value="Employer">Employer</option>
+                  <option value="Admin">Admin</option>
+                </select>
+              </div>
+              <p style={{ color: '#ff6b6b', marginTop: '10px' }}>
+                ⚠️ Warning: Changing user role may affect their access and data. Admin role grants full system access.
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-view" onClick={handleChangeRole}>
+                Change Role
+              </button>
+              <button className="btn-secondary" onClick={() => { setShowRoleModal(false); setSelectedUser(null); }}>
+                Cancel
               </button>
             </div>
           </div>

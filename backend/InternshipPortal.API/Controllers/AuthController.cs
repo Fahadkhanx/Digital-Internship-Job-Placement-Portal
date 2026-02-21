@@ -20,14 +20,19 @@ namespace InternshipPortal.API.Controllers
         {
             try
             {
-                var token = await _authService.RegisterStudentAsync(
+                var result = await _authService.RegisterStudentAsync(
                     request.Email,
                     request.Password,
                     request.FirstName,
                     request.LastName
                 );
 
-                return Ok(new { success = true, message = "Student registered successfully", token });
+                return Ok(new { 
+                    success = result.Success, 
+                    message = result.Message,
+                    userId = result.UserId,
+                    email = result.Email
+                });
             }
             catch (Exception ex)
             {
@@ -40,13 +45,58 @@ namespace InternshipPortal.API.Controllers
         {
             try
             {
-                var message = await _authService.RegisterEmployerAsync(
+                var result = await _authService.RegisterEmployerAsync(
                     request.Email,
                     request.Password,
                     request.CompanyName
                 );
 
-                return Ok(new { success = true, message });
+                return Ok(new { 
+                    success = result.Success, 
+                    message = result.Message,
+                    userId = result.UserId,
+                    email = result.Email
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("verify-email")]
+        public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailRequest request)
+        {
+            try
+            {
+                var success = await _authService.VerifyEmailCodeAsync(request.Email, request.Code);
+                
+                if (success)
+                {
+                    return Ok(new { success = true, message = "Email verified successfully" });
+                }
+
+                return BadRequest(new { success = false, message = "Invalid verification code" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("resend-verification-code")]
+        public async Task<IActionResult> ResendVerificationCode([FromBody] ResendVerificationCodeRequest request)
+        {
+            try
+            {
+                var success = await _authService.ResendVerificationCodeAsync(request.Email);
+                
+                if (success)
+                {
+                    return Ok(new { success = true, message = "Verification code sent successfully" });
+                }
+
+                return BadRequest(new { success = false, message = "Failed to send verification code" });
             }
             catch (Exception ex)
             {
@@ -99,6 +149,63 @@ namespace InternshipPortal.API.Controllers
                 return BadRequest(new { success = false, message = ex.Message });
             }
         }
+
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+        {
+            try
+            {
+                var success = await _authService.RequestPasswordResetAsync(request.Email);
+                
+                // Always return success for security (don't reveal if email exists)
+                return Ok(new { 
+                    success = true, 
+                    message = "If an account with that email exists, a password reset link has been sent." 
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("verify-reset-token")]
+        public async Task<IActionResult> VerifyResetToken([FromBody] VerifyResetTokenRequest request)
+        {
+            try
+            {
+                var isValid = await _authService.VerifyResetTokenAsync(request.Token);
+                
+                return Ok(new { 
+                    success = true, 
+                    isValid 
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+        {
+            try
+            {
+                var success = await _authService.ResetPasswordAsync(request.Token, request.NewPassword);
+                
+                if (success)
+                {
+                    return Ok(new { success = true, message = "Password reset successfully" });
+                }
+
+                return BadRequest(new { success = false, message = "Invalid or expired reset token" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
+        }
     }
 
     public class RegisterStudentRequest
@@ -126,6 +233,33 @@ namespace InternshipPortal.API.Controllers
     {
         public string CurrentPassword { get; set; } = string.Empty;
         public string NewPassword { get; set; } = string.Empty;
+    }
+
+    public class ForgotPasswordRequest
+    {
+        public string Email { get; set; } = string.Empty;
+    }
+
+    public class VerifyResetTokenRequest
+    {
+        public string Token { get; set; } = string.Empty;
+    }
+
+    public class ResetPasswordRequest
+    {
+        public string Token { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
+    }
+
+    public class VerifyEmailRequest
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Code { get; set; } = string.Empty;
+    }
+
+    public class ResendVerificationCodeRequest
+    {
+        public string Email { get; set; } = string.Empty;
     }
 }
 

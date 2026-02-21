@@ -13,14 +13,22 @@ namespace InternshipPortal.API.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly IEmailService _emailService;
 
-        public AuthService(ApplicationDbContext context, IConfiguration configuration)
+        public AuthService(ApplicationDbContext context, IConfiguration configuration, IEmailService emailService)
         {
             _context = context;
             _configuration = configuration;
+            _emailService = emailService;
         }
 
-        public async Task<string> RegisterStudentAsync(string email, string password, string firstName, string lastName)
+        private string GenerateVerificationCode()
+        {
+            var random = new Random();
+            return random.Next(100000, 999999).ToString(); // 6-digit code
+        }
+
+        public async Task<RegisterResult> RegisterStudentAsync(string email, string password, string firstName, string lastName)
         {
             if (await _context.Users.AnyAsync(u => u.Email == email))
             {
@@ -28,6 +36,7 @@ namespace InternshipPortal.API.Services
             }
 
             var passwordHash = BCrypt.Net.BCrypt.HashPassword(password);
+            var verificationCode = GenerateVerificationCode();
 
             var user = new User
             {
@@ -35,7 +44,11 @@ namespace InternshipPortal.API.Services
                 PasswordHash = passwordHash,
                 UserType = UserType.Student,
                 IsVerified = false,
-                IsActive = true
+                IsActive = true,
+                VerificationCode = verificationCode,
+                VerificationCodeExpiresAt = DateTime.UtcNow.AddMinutes(10),
+                VerificationAttempts = 0,
+                ResendCodeAttempts = 0
             };
 
             _context.Users.Add(user);
@@ -51,10 +64,19 @@ namespace InternshipPortal.API.Services
             _context.Students.Add(student);
             await _context.SaveChangesAsync();
 
-            return GenerateJwtToken(user);
+            // Send verification code email
+            await _emailService.SendVerificationCodeEmailAsync(email, verificationCode);
+
+            return new RegisterResult
+            {
+                Success = true,
+                Message = "Registration successful! Please check your email for verification code.",
+                UserId = user.UserId,
+                Email = email
+            };
         }
 
-        public async Task<string> RegisterEmployerAsync(string email, string password, string companyName)
+        public async Task<RegisterResult> RegisterEmployerAsync(string email, string password, string companyName)
         {
             if (await _context.Users.AnyAsync(u => u.Email == email))
             {
@@ -62,6 +84,7 @@ namespace InternshipPortal.API.Services
             }
 
             var passwordHash = BCrypt.Net.BCrypt.HashPassword(password);
+            var verificationCode = GenerateVerificationCode();
 
             var user = new User
             {
@@ -69,7 +92,11 @@ namespace InternshipPortal.API.Services
                 PasswordHash = passwordHash,
                 UserType = UserType.Employer,
                 IsVerified = false,
-                IsActive = true
+                IsActive = true,
+                VerificationCode = verificationCode,
+                VerificationCodeExpiresAt = DateTime.UtcNow.AddMinutes(10),
+                VerificationAttempts = 0,
+                ResendCodeAttempts = 0
             };
 
             _context.Users.Add(user);
@@ -85,7 +112,16 @@ namespace InternshipPortal.API.Services
             _context.Employers.Add(employer);
             await _context.SaveChangesAsync();
 
-            return "Employer registered successfully. Pending verification.";
+            // Send verification code email
+            await _emailService.SendVerificationCodeEmailAsync(email, verificationCode);
+
+            return new RegisterResult
+            {
+                Success = true,
+                Message = "Registration successful! Please check your email for verification code.",
+                UserId = user.UserId,
+                Email = email
+            };
         }
 
         public async Task<LoginResult> LoginAsync(string email, string password)
@@ -119,6 +155,12 @@ namespace InternshipPortal.API.Services
                 throw new Exception("Account is deactivated");
             }
 
+            // Check if email is verified
+            if (!user.IsVerified)
+            {
+                throw new Exception("Please verify your email before logging in. Check your email for verification code.");
+            }
+
             var token = GenerateJwtToken(user);
 
             return new LoginResult
@@ -142,6 +184,188 @@ namespace InternshipPortal.API.Services
 
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
             await _context.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<bool> RequestPasswordResetAsync(string email)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            
+            if (user == null)
+            {
+                // Don't reveal if email exists or not (security best practice)
+                return true;
+            }
+
+            // Invalidate any existing reset tokens for this user
+            var existingTokens = await _context.PasswordResetTokens
+                .Where(t => t.UserId == user.UserId && !t.Used && t.ExpiresAt > DateTime.UtcNow)
+                .ToListAsync();
+            
+            foreach (var token in existingTokens)
+            {
+                token.Used = true;
+            }
+
+            // Generate new reset token
+            var resetToken = Guid.NewGuid().ToString() + Guid.NewGuid().ToString();
+            var tokenEntity = new PasswordResetToken
+            {
+                UserId = user.UserId,
+                Token = resetToken,
+                ExpiresAt = DateTime.UtcNow.AddHours(24), // Token valid for 24 hours
+                Used = false
+            };
+
+            _context.PasswordResetTokens.Add(tokenEntity);
+            await _context.SaveChangesAsync();
+
+            // Send email with reset link
+            await _emailService.SendPasswordResetEmailAsync(user.Email, resetToken);
+
+            return true;
+        }
+
+        public async Task<bool> VerifyResetTokenAsync(string token)
+        {
+            var resetToken = await _context.PasswordResetTokens
+                .FirstOrDefaultAsync(t => t.Token == token && !t.Used && t.ExpiresAt > DateTime.UtcNow);
+
+            return resetToken != null;
+        }
+
+        public async Task<bool> ResetPasswordAsync(string token, string newPassword)
+        {
+            var resetToken = await _context.PasswordResetTokens
+                .Include(t => t.User)
+                .FirstOrDefaultAsync(t => t.Token == token && !t.Used && t.ExpiresAt > DateTime.UtcNow);
+
+            if (resetToken == null || resetToken.User == null)
+            {
+                return false;
+            }
+
+            // Update password
+            resetToken.User.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            
+            // Mark token as used
+            resetToken.Used = true;
+
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<bool> VerifyEmailCodeAsync(string email, string code)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+            if (user == null)
+            {
+                throw new Exception("User not found");
+            }
+
+            // Check if user is already verified
+            if (user.IsVerified)
+            {
+                return true;
+            }
+
+            // Check if verification code exists and is not expired
+            if (string.IsNullOrEmpty(user.VerificationCode) || 
+                user.VerificationCodeExpiresAt == null || 
+                user.VerificationCodeExpiresAt < DateTime.UtcNow)
+            {
+                throw new Exception("Verification code has expired. Please request a new code.");
+            }
+
+            // Check verification attempts (3 wrong attempts = 5 min cooldown)
+            if (user.VerificationAttempts >= 3)
+            {
+                if (user.LastVerificationAttemptAt != null && 
+                    user.LastVerificationAttemptAt.Value.AddMinutes(5) > DateTime.UtcNow)
+                {
+                    var remainingMinutes = (int)Math.Ceiling((user.LastVerificationAttemptAt.Value.AddMinutes(5) - DateTime.UtcNow).TotalMinutes);
+                    throw new Exception($"Too many failed attempts. Please wait {remainingMinutes} minute(s) before trying again.");
+                }
+                else
+                {
+                    // Reset attempts after cooldown period
+                    user.VerificationAttempts = 0;
+                    user.LastVerificationAttemptAt = null;
+                }
+            }
+
+            // Verify code
+            if (user.VerificationCode != code)
+            {
+                user.VerificationAttempts++;
+                user.LastVerificationAttemptAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                throw new Exception($"Invalid verification code. {3 - user.VerificationAttempts} attempt(s) remaining.");
+            }
+
+            // Code is correct - verify user
+            user.IsVerified = true;
+            user.VerificationCode = null;
+            user.VerificationCodeExpiresAt = null;
+            user.VerificationAttempts = 0;
+            user.LastVerificationAttemptAt = null;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            return true;
+        }
+
+        public async Task<bool> ResendVerificationCodeAsync(string email)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+            if (user == null)
+            {
+                throw new Exception("User not found");
+            }
+
+            // Check if user is already verified
+            if (user.IsVerified)
+            {
+                throw new Exception("Email is already verified");
+            }
+
+            // Check resend attempts limit (3 attempts max)
+            if (user.ResendCodeAttempts >= 3)
+            {
+                // Check if 5 minutes have passed since last resend
+                if (user.LastResendCodeAt != null && 
+                    user.LastResendCodeAt.Value.AddMinutes(5) > DateTime.UtcNow)
+                {
+                    var remainingMinutes = (int)Math.Ceiling((user.LastResendCodeAt.Value.AddMinutes(5) - DateTime.UtcNow).TotalMinutes);
+                    throw new Exception($"Too many resend requests. Please wait {remainingMinutes} minute(s) before requesting a new code.");
+                }
+                else
+                {
+                    // Reset attempts after cooldown period
+                    user.ResendCodeAttempts = 0;
+                    user.LastResendCodeAt = null;
+                }
+            }
+
+            // Generate new verification code
+            var verificationCode = GenerateVerificationCode();
+            user.VerificationCode = verificationCode;
+            user.VerificationCodeExpiresAt = DateTime.UtcNow.AddMinutes(10);
+            user.ResendCodeAttempts++;
+            user.LastResendCodeAt = DateTime.UtcNow;
+            user.VerificationAttempts = 0; // Reset verification attempts when resending
+            user.LastVerificationAttemptAt = null;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            // Send verification code email
+            await _emailService.SendVerificationCodeEmailAsync(email, verificationCode);
 
             return true;
         }

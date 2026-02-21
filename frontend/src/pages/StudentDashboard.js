@@ -111,6 +111,7 @@ const StudentDashboard = () => {
               <Link to="/student/profile" className="action-btn">✏️ Edit Profile</Link>
               <Link to="/student/applications" className="action-btn">📋 My Applications</Link>
               <Link to="/student/saved-jobs" className="action-btn">💾 Saved Jobs</Link>
+              <Link to="/messages" className="action-btn">💬 Messages</Link>
             </div>
           </div>
 

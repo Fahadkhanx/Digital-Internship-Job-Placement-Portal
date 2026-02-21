@@ -1,8 +1,10 @@
 using InternshipPortal.API.Data;
 using InternshipPortal.API.Models;
+using InternshipPortal.API.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace InternshipPortal.API.Controllers
 {
@@ -11,25 +13,43 @@ namespace InternshipPortal.API.Controllers
     public class JobsController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly IJobService _jobService;
 
-        public JobsController(ApplicationDbContext context)
+        public JobsController(ApplicationDbContext context, IJobService jobService)
         {
             _context = context;
+            _jobService = jobService;
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetJobs([FromQuery] string? search, [FromQuery] string? jobType, [FromQuery] string? location, [FromQuery] int page = 1, [FromQuery] int limit = 10)
+        public async Task<IActionResult> GetJobs(
+            [FromQuery] string? search, 
+            [FromQuery] string? jobType, 
+            [FromQuery] string? location,
+            [FromQuery] string? experienceLevel,
+            [FromQuery] string? requiredSkills,
+            [FromQuery] decimal? salaryMin,
+            [FromQuery] decimal? salaryMax,
+            [FromQuery] bool? remoteOnly,
+            [FromQuery] DateTime? postedAfter,
+            [FromQuery] DateTime? deadlineBefore,
+            [FromQuery] string? sortBy = "newest",
+            [FromQuery] int page = 1, 
+            [FromQuery] int limit = 10)
         {
             var query = _context.JobPostings
                 .Include(j => j.Employer)
                 .ThenInclude(e => e.User)
                 .Where(j => j.IsActive && j.Employer.VerificationStatus == VerificationStatus.Verified);
 
+            // Search in title and description
             if (!string.IsNullOrEmpty(search))
             {
-                query = query.Where(j => j.Title.Contains(search) || j.Description.Contains(search));
+                query = query.Where(j => j.Title.Contains(search) || j.Description.Contains(search) || 
+                    (j.RequiredSkills != null && j.RequiredSkills.Contains(search)));
             }
 
+            // Job type filter
             if (!string.IsNullOrEmpty(jobType))
             {
                 if (Enum.TryParse<JobType>(jobType, true, out var type))
@@ -38,9 +58,77 @@ namespace InternshipPortal.API.Controllers
                 }
             }
 
+            // Location filter
             if (!string.IsNullOrEmpty(location))
             {
                 query = query.Where(j => (j.Location != null && j.Location.Contains(location)) || j.RemoteOption);
+            }
+
+            // Experience level filter
+            if (!string.IsNullOrEmpty(experienceLevel))
+            {
+                if (Enum.TryParse<ExperienceLevel>(experienceLevel, true, out var expLevel))
+                {
+                    query = query.Where(j => j.ExperienceLevel == expLevel);
+                }
+            }
+
+            // Required skills filter
+            if (!string.IsNullOrEmpty(requiredSkills))
+            {
+                var skills = requiredSkills.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                foreach (var skill in skills)
+                {
+                    query = query.Where(j => j.RequiredSkills != null && j.RequiredSkills.Contains(skill));
+                }
+            }
+
+            // Salary range filter
+            if (salaryMin.HasValue)
+            {
+                query = query.Where(j => j.SalaryMax == null || j.SalaryMax >= salaryMin.Value);
+            }
+            if (salaryMax.HasValue)
+            {
+                query = query.Where(j => j.SalaryMin == null || j.SalaryMin <= salaryMax.Value);
+            }
+
+            // Remote only filter
+            if (remoteOnly == true)
+            {
+                query = query.Where(j => j.RemoteOption == true);
+            }
+
+            // Posted after date filter
+            if (postedAfter.HasValue)
+            {
+                query = query.Where(j => j.CreatedAt >= postedAfter.Value);
+            }
+
+            // Deadline before filter
+            if (deadlineBefore.HasValue)
+            {
+                query = query.Where(j => j.ApplicationDeadline == null || j.ApplicationDeadline <= deadlineBefore.Value);
+            }
+
+            // Sorting
+            switch (sortBy.ToLower())
+            {
+                case "salary_high":
+                    query = query.OrderByDescending(j => j.SalaryMax ?? j.SalaryMin ?? 0);
+                    break;
+                case "salary_low":
+                    query = query.OrderBy(j => j.SalaryMin ?? j.SalaryMax ?? decimal.MaxValue);
+                    break;
+                case "deadline":
+                    query = query.OrderBy(j => j.ApplicationDeadline ?? DateTime.MaxValue);
+                    break;
+                case "oldest":
+                    query = query.OrderBy(j => j.CreatedAt);
+                    break;
+                default: // newest
+                    query = query.OrderByDescending(j => j.CreatedAt);
+                    break;
             }
 
             var total = await query.CountAsync();
@@ -325,6 +413,106 @@ namespace InternshipPortal.API.Controllers
             await _context.SaveChangesAsync();
 
             return Ok(new { success = true, message = "Job deleted successfully" });
+        }
+
+        [Authorize(Roles = "Student")]
+        [HttpGet("matched")]
+        public async Task<IActionResult> GetMatchedJobs(
+            [FromQuery] int page = 1,
+            [FromQuery] int limit = 10)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                
+                // Get student ID from user ID
+                var student = await _context.Students
+                    .FirstOrDefaultAsync(s => s.UserId == userId);
+
+                if (student == null)
+                {
+                    return NotFound(new { success = false, message = "Student profile not found" });
+                }
+
+                var matchedJobs = await _jobService.GetMatchedJobsForStudentAsync(student.StudentId, page, limit);
+
+                var jobs = matchedJobs.Select(mj => new
+                {
+                    mj.Job.JobId,
+                    mj.Job.Title,
+                    mj.Job.Description,
+                    mj.Job.JobType,
+                    mj.Job.Location,
+                    mj.Job.RemoteOption,
+                    mj.Job.SalaryMin,
+                    mj.Job.SalaryMax,
+                    mj.Job.Currency,
+                    mj.Job.RequiredSkills,
+                    mj.Job.ExperienceLevel,
+                    mj.Job.ApplicationDeadline,
+                    mj.Job.CreatedAt,
+                    CompanyName = mj.Job.Employer?.CompanyName,
+                    CompanyLogo = mj.Job.Employer?.LogoUrl,
+                    MatchScore = mj.MatchScore,
+                    MatchedSkillsCount = mj.MatchedSkillsCount,
+                    TotalRequiredSkills = mj.TotalRequiredSkills,
+                    MatchedSkills = mj.MatchedSkills,
+                    MissingSkills = mj.MissingSkills
+                }).ToList();
+
+                return Ok(new
+                {
+                    success = true,
+                    jobs,
+                    pagination = new
+                    {
+                        page,
+                        limit,
+                        total = matchedJobs.Count
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [Authorize(Roles = "Student")]
+        [HttpGet("{id}/match-score")]
+        public async Task<IActionResult> GetJobMatchScore(int id)
+        {
+            try
+            {
+                var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+                
+                var student = await _context.Students
+                    .FirstOrDefaultAsync(s => s.UserId == userId);
+
+                if (student == null)
+                {
+                    return NotFound(new { success = false, message = "Student profile not found" });
+                }
+
+                var matchScore = await _jobService.CalculateMatchScoreAsync(id, student.StudentId);
+
+                return Ok(new
+                {
+                    success = true,
+                    matchScore = new
+                    {
+                        score = matchScore.Score,
+                        matchedSkillsCount = matchScore.MatchedSkillsCount,
+                        totalRequiredSkills = matchScore.TotalRequiredSkills,
+                        matchedSkills = matchScore.MatchedSkills,
+                        missingSkills = matchScore.MissingSkills
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
         }
     }
 
