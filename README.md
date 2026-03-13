@@ -2,77 +2,76 @@
 
 A comprehensive web-based platform that connects students with verified employers for internships and entry-level job opportunities.
 
-## Project Overview
+# Project Overview
 
 This portal provides a centralized, secure platform where:
-- **Students** can create profiles, upload resumes, search for jobs, and track applications
-- **Employers** can post verified job openings, search student profiles, and manage applications
-- **Administrators** can verify employers, manage users, and monitor platform activity
+Students can create profiles, upload resumes, search for jobs, and track applications
+Employers can post verified job openings, search student profiles, and manage applications
+Administrators can verify employers, manage users, and monitor platform activity
 
-## Technology Stack
+# Technology Stack
 
-- **Frontend**: React.js with responsive design
-- **Backend**: C# ASP.NET Core Web API
-- **Database**: MySQL Server
-- **Version Control**: Git & GitHub
-- **Project Management**: Trello (Agile methodology)
+Frontend: React.js with responsive design
+Backend: C# ASP.NET Core Web API
+Database: MySQL Server
+Version Control: Git & GitHub
+Project Management: Trello (Agile methodology)
 
-## Project Structure
+# Project Structure
 
-```
 internship-and-job-placement/
 ├── frontend/              # React.js application
 ├── backend/               # C# ASP.NET Core Web API
 ├── database/              # MySQL schema and scripts
 └── docs/                  # Documentation
-```
 
-## Development Timeline
 
-- **Week 1**: Requirements and design ✅
-- **Week 2**: Database schema and ER diagrams
-- **Week 3**: Frontend UI prototype
-- **Week 4**: Backend authentication APIs
-- **Week 5**: Skill-based matching algorithm
-- **Week 6**: Dashboards and communication
-- **Week 7**: Testing and optimization
-- **Week 8**: Documentation and deployment
+# Development Timeline
 
-## Installation & Setup
+Week 1: Requirements and design
+Week 2: Database schema and ER diagrams
+Week 3: Frontend UI prototype
+Week 4: Backend authentication APIs
+Week 5: Skill-based matching algorithm
+Week 6: Dashboards and communication
+Week 7: Testing and optimization
+Week 8: Documentation and deployment
 
-### Prerequisites
-- Node.js (v16 or higher)
-- .NET 6.0 SDK or higher
-- MySQL Server 8.0 or higher
-- Visual Studio 2022 or VS Code
+# Installation & Setup
 
-### Database Setup
-```bash
+# Prerequisites
+Node.js (v16 or higher)
+.NET 6.0 SDK or higher
+MySQL Server 8.0 or higher
+Visual Studio 2022 or VS Code
+
+# Database Setup
+bash
 # MySQL mein database create karein
 mysql -u root -p < database/schema.sql
-```
 
-### Backend Setup (C# .NET)
-```bash
+
+# Backend Setup (C# .NET)
+bash
 cd backend/InternshipPortal.API
-# appsettings.json mein database connection string update karein
+appsettings.json database connection string update 
 dotnet restore
 dotnet run
-# API http://localhost:5000 par chalega
-```
+API http://localhost:5000 
 
-### Frontend Setup (React)
-```bash
+
+# Frontend Setup (React)
+bash
 cd frontend
 npm install
-# .env file create karo aur REACT_APP_API_URL set karo
+.env file create REACT_APP_API_URL 
 npm start
-# Frontend http://localhost:3000 par chalega
-```
+Frontend http://localhost:3000 
 
-## Project Structure
 
-```
+# Project Structure
+
+
 internship-and-job-placement/
 ├── frontend/                    # React.js application
 │   ├── public/
@@ -95,17 +94,15 @@ internship-and-job-placement/
 └── docs/                        # Documentation
     ├── WEEK_WISE_PLAN.md
     └── GITHUB_UPLOAD_GUIDE.md
-```
 
-## Contributors
 
-- Fahad Shah
-- Khan Huzaifa
+# Contributors
 
-## Supervisor
+Fahad Shah
+Khan Huzaifa
+
+# Supervisor
 
 David Keane
 
-## License
 
-This project is developed for academic purposes.
