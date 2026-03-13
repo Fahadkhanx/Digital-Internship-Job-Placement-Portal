@@ -18,14 +18,14 @@ Version Control: Git & GitHub
 Project Management: Trello (Agile methodology)
 
 # Project Structure
-
+```
 internship-and-job-placement/
 ├── frontend/              # React.js application
 ├── backend/               # C# ASP.NET Core Web API
 ├── database/              # MySQL schema and scripts
 └── docs/                  # Documentation
 
-
+```
 # Development Timeline
 
 Week 1: Requirements and design
@@ -71,7 +71,7 @@ Frontend http://localhost:3000
 
 # Project Structure
 
-
+```
 internship-and-job-placement/
 ├── frontend/                    # React.js application
 │   ├── public/
@@ -94,7 +94,7 @@ internship-and-job-placement/
 └── docs/                        # Documentation
     ├── WEEK_WISE_PLAN.md
     └── GITHUB_UPLOAD_GUIDE.md
-
+```
 
 # Contributors
 
