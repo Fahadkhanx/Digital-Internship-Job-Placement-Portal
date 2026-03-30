@@ -1,0 +1,203 @@
+using InternshipPortal.API.Data;
+using InternshipPortal.API.Models;
+using Microsoft.EntityFrameworkCore;
+
+namespace InternshipPortal.API.Services
+{
+    public class ApplicationService : IApplicationService
+    {
+        private readonly ApplicationDbContext _context;
+        private readonly INotificationService _notificationService;
+
+        public ApplicationService(ApplicationDbContext context, INotificationService notificationService)
+        {
+            _context = context;
+            _notificationService = notificationService;
+        }
+
+        public async Task<Application> ApplyForJobAsync(int userId, int jobId, string? coverLetter)
+        {
+            // Check if student exists
+            var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId);
+            if (student == null)
+            {
+                throw new Exception("Student profile not found. Please complete your profile first.");
+            }
+
+            // Check if job exists and is active
+            var job = await _context.JobPostings
+                .FirstOrDefaultAsync(j => j.JobId == jobId && j.IsActive);
+            if (job == null)
+            {
+                throw new Exception("Job not found or no longer available");
+            }
+
+            // Check if already applied
+            var existingApplication = await _context.Applications
+                .FirstOrDefaultAsync(a => a.JobId == jobId && a.StudentId == student.StudentId);
+
+            if (existingApplication != null)
+            {
+                throw new Exception("You have already applied for this job");
+            }
+
+            // Create application
+            var application = new Application
+            {
+                JobId = jobId,
+                StudentId = student.StudentId,
+                CoverLetter = coverLetter,
+                Status = ApplicationStatus.Pending,
+                AppliedAt = DateTime.UtcNow
+            };
+
+            _context.Applications.Add(application);
+            await _context.SaveChangesAsync();
+
+            // Create notification for employer
+            var jobWithEmployer = await _context.JobPostings
+                .Include(j => j.Employer)
+                    .ThenInclude(e => e.User)
+                .FirstOrDefaultAsync(j => j.JobId == jobId);
+            
+            if (jobWithEmployer?.Employer?.User != null)
+            {
+                await _notificationService.CreateNotificationAsync(
+                    jobWithEmployer.Employer.User.UserId,
+                    "new_application",
+                    "New Application Received",
+                    $"A new application has been received for the position: {jobWithEmployer.Title}",
+                    $"/employer/dashboard"
+                );
+            }
+
+            return application;
+        }
+
+        public async Task<List<Application>> GetStudentApplicationsAsync(int userId)
+        {
+            var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId);
+            if (student == null)
+            {
+                return new List<Application>();
+            }
+
+            return await _context.Applications
+                .Include(a => a.Job)
+                    .ThenInclude(j => j.Employer)
+                        .ThenInclude(e => e.User)
+                .Where(a => a.StudentId == student.StudentId)
+                .OrderByDescending(a => a.AppliedAt)
+                .ToListAsync();
+        }
+
+        public async Task<List<Application>> GetJobApplicationsAsync(int employerUserId, int jobId)
+        {
+            var employer = await _context.Employers.FirstOrDefaultAsync(e => e.UserId == employerUserId);
+            if (employer == null)
+            {
+                throw new Exception("Employer not found");
+            }
+
+            var job = await _context.JobPostings
+                .FirstOrDefaultAsync(j => j.JobId == jobId && j.EmployerId == employer.EmployerId);
+            if (job == null)
+            {
+                throw new Exception("Job not found");
+            }
+
+            return await _context.Applications
+                .Include(a => a.Student)
+                    .ThenInclude(s => s.User)
+                .Include(a => a.Job)
+                    .ThenInclude(j => j.Employer)
+                        .ThenInclude(e => e.User)
+                .Where(a => a.JobId == jobId)
+                .OrderByDescending(a => a.AppliedAt)
+                .ToListAsync();
+        }
+
+        public async Task<bool> HasAppliedAsync(int userId, int jobId)
+        {
+            var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId);
+            if (student == null)
+            {
+                return false;
+            }
+
+            return await _context.Applications
+                .AnyAsync(a => a.JobId == jobId && a.StudentId == student.StudentId);
+        }
+
+        public async Task<Application?> GetApplicationAsync(int applicationId, int userId)
+        {
+            var student = await _context.Students.FirstOrDefaultAsync(s => s.UserId == userId);
+            if (student == null)
+            {
+                return null;
+            }
+
+            return await _context.Applications
+                .Include(a => a.Job)
+                    .ThenInclude(j => j.Employer)
+                .FirstOrDefaultAsync(a => a.ApplicationId == applicationId && a.StudentId == student.StudentId);
+        }
+
+        public async Task<Application> UpdateApplicationStatusAsync(int employerUserId, int applicationId, ApplicationStatus status)
+        {
+            var employer = await _context.Employers.FirstOrDefaultAsync(e => e.UserId == employerUserId);
+            if (employer == null)
+            {
+                throw new Exception("Employer not found");
+            }
+
+            var application = await _context.Applications
+                .Include(a => a.Job)
+                .FirstOrDefaultAsync(a => a.ApplicationId == applicationId);
+
+            if (application == null)
+            {
+                throw new Exception("Application not found");
+            }
+
+            // Verify that the job belongs to this employer
+            if (application.Job.EmployerId != employer.EmployerId)
+            {
+                throw new Exception("You don't have permission to update this application");
+            }
+
+            var oldStatus = application.Status;
+            application.Status = status;
+            application.ReviewedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+
+            // Create notification for student about status change
+            var student = await _context.Students
+                .Include(s => s.User)
+                .FirstOrDefaultAsync(s => s.StudentId == application.StudentId);
+            
+            if (student?.User != null && oldStatus != status)
+            {
+                string statusMessage = status switch
+                {
+                    ApplicationStatus.Reviewed => "Your application has been reviewed",
+                    ApplicationStatus.Shortlisted => "Congratulations! You have been shortlisted",
+                    ApplicationStatus.Accepted => "Congratulations! Your application has been accepted",
+                    ApplicationStatus.Rejected => "Your application status has been updated",
+                    _ => "Your application status has been updated"
+                };
+
+                await _notificationService.CreateNotificationAsync(
+                    student.User.UserId,
+                    "application_status",
+                    $"Application Status: {status}",
+                    $"{statusMessage} for the position: {application.Job?.Title ?? "N/A"}",
+                    $"/student/applications"
+                );
+            }
+
+            return application;
+        }
+    }
+}
