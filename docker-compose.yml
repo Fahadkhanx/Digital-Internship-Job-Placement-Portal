@@ -1,0 +1,51 @@
+services:
+  database:
+    build:
+      context: ./database
+      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/internship-portal-database:latest
+    container_name: internship-portal-database
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: internship_job_portal
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend/InternshipPortal.API
+      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/internship-portal-backend:latest
+    container_name: internship-portal-backend
+    environment:
+      ConnectionStrings__DefaultConnection: Server=database;Database=internship_job_portal;User=root;Password=root;Port=3306;CharSet=utf8mb4;
+      ASPNETCORE_ENVIRONMENT: Production
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend/InternshipPortal.API/uploads:/app/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: ${DOCKERHUB_USERNAME}/internship-portal-frontend:latest
+    container_name: internship-portal-frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  db_data:
+
